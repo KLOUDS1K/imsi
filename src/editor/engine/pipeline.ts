@@ -25,6 +25,8 @@ export interface PipelineOptions {
   patchProvider: PatchProvider | null;
   /** Mask whose coverage should be warped into output space for the overlay. */
   overlayMask: Mask | null;
+  /** One-off renders (export, thumbnails): don't read or replace the display stage caches. */
+  noCache?: boolean;
 }
 
 export interface PipelineResult {
@@ -51,6 +53,7 @@ export class Pipeline {
 
   /** Drop per-photo GPU caches (masks, patches). */
   clearPhotoCaches(): void {
+    this.dropStages(true);
     for (const t of this.maskTex.values()) this.env.pool.destroy(t);
     this.maskTex.clear();
     for (const p of this.patchTex.values()) this.env.pool.destroy(p.tex);
@@ -58,6 +61,7 @@ export class Pipeline {
   }
 
   forget(): void {
+    this.dropStages(false);
     this.lut = null;
     this.maskTex.clear();
     this.patchTex.clear();
@@ -160,6 +164,49 @@ export class Pipeline {
     return tex;
   }
 
+  /** Identity of a pixel array (so a recomputed patch invalidates the cache). */
+  private dataIds = new WeakMap<object, number>();
+  private nextDataId = 1;
+  private dataId(o: object): number {
+    let id = this.dataIds.get(o);
+    if (!id) {
+      id = this.nextDataId++;
+      this.dataIds.set(o, id);
+    }
+    return id;
+  }
+
+  /**
+   * Stage caches: the source-space result after DETAIL (A) and after LOCAL
+   * (B). Changing only crop / transform / effects re-runs GEOMETRY + EFFECTS;
+   * changing only a mask re-runs the LOCAL passes.
+   */
+  private stageA: { key: string; tex: Tex } | null = null;
+  private stageB: { key: string; tex: Tex } | null = null;
+
+  private isCached(t: Tex): boolean {
+    return t === this.stageA?.tex || t === this.stageB?.tex;
+  }
+
+  private setStage(which: 'stageA' | 'stageB', key: string, tex: Tex, owned: Set<Tex>): void {
+    const old = this[which];
+    this[which] = { key, tex };
+    // Release the replaced texture unless it is still referenced (or is not ours, e.g. the working image).
+    if (old && old.tex !== tex && !this.isCached(old.tex) && this.ownedCache.has(old.tex)) {
+      this.ownedCache.delete(old.tex);
+      this.env.pool.release(old.tex);
+    }
+    if (owned.has(tex)) this.ownedCache.add(tex);
+  }
+  private ownedCache = new Set<Tex>();
+
+  private dropStages(release: boolean): void {
+    if (release) for (const t of this.ownedCache) this.env.pool.release(t);
+    this.ownedCache.clear();
+    this.stageA = null;
+    this.stageB = null;
+  }
+
   run(img: WorkingImage, params: EditParams, opts: PipelineOptions): PipelineResult {
     const env = this.env;
     this.blur.beginFrame();
@@ -167,34 +214,62 @@ export class Pipeline {
     const ctx = this.baseContext(img, params, opts);
     let cur: Tex = img.tex;
 
-    // 1. Retouch (linear, source space).
-    if (opts.patchProvider) {
-      params.retouch.removals.forEach((r, i) => {
-        const patch = this.patchTexture(opts.patchProvider!, r.patchKey);
-        if (!patch) return;
-        cur = this.runPass(PATCH_COMPOSITE_PASS, params, ctx, { uInput: cur, uPatch: patch }, { iteration: i });
-      });
-    }
-    const spots = params.retouch.spots;
-    for (let i = 0; i < spots.length; i += MAX_SPOTS_PER_PASS) {
-      cur = this.runPass(HEAL_PASS, params, ctx, { uInput: cur }, { spots: spots.slice(i, i + MAX_SPOTS_PER_PASS) });
-    }
-
-    // 2. PRE (calibration, WB, exposure, lens vignetting) → 3. DEVELOP.
-    const pre = this.runPass(PRE_PASS, params, ctx, { uInput: cur });
-    cur = this.runPass(DEVELOP_PASS, params, ctx, { uInput: pre, uPre: pre, uCurveLut: this.curveLut(params) });
-
-    // 4. DETAIL (display-referred).
-    for (const pass of DETAIL_STAGE) cur = this.runPass(pass, params, ctx, { uInput: cur, uPre: pre });
-
-    // 5. LOCAL adjustments, one pass per visible mask.
+    // Cache keys. Stage A depends on everything except masks and output-space settings.
+    const { masks, crop, transform, effects, ...sourceParams } = params;
+    void crop;
+    void transform;
+    void effects;
+    const patchSig = opts.patchProvider
+      ? params.retouch.removals.map((r) => {
+          const px = opts.patchProvider!.getPatch(r.patchKey);
+          return px ? this.dataId(px.data) : 0;
+        })
+      : [];
+    const keyA = JSON.stringify([img.key, img.width, img.height, opts.quality, sourceParams, patchSig]);
+    const maskTextures: { mask: Mask; tex: Tex }[] = [];
     if (opts.maskProvider) {
-      for (const mask of params.masks) {
+      for (const mask of masks) {
         if (!mask.visible || mask.components.length === 0) continue;
         const m = this.maskTexture(opts.maskProvider, mask, img.width, img.height);
-        if (!m) continue;
-        cur = this.runPass(LOCAL_PASS, params, ctx, { uInput: cur, uMask: m, uPre: pre }, { mask });
+        if (m) maskTextures.push({ mask, tex: m });
       }
+    }
+    const keyB = JSON.stringify([keyA, maskTextures.map(({ mask, tex }) => [mask.id, mask.amount, mask.adjustments, tex.uid, tex.gen])]);
+
+    const useCache = !opts.noCache;
+    if (useCache && this.stageB?.key === keyB) {
+      cur = this.stageB.tex;
+    } else {
+      if (useCache && this.stageA?.key === keyA) {
+        cur = this.stageA.tex;
+      } else {
+        // 1. Retouch (linear, source space).
+        if (opts.patchProvider) {
+          params.retouch.removals.forEach((r, i) => {
+            const patch = this.patchTexture(opts.patchProvider!, r.patchKey);
+            if (!patch) return;
+            cur = this.runPass(PATCH_COMPOSITE_PASS, params, ctx, { uInput: cur, uPatch: patch }, { iteration: i });
+          });
+        }
+        const spots = params.retouch.spots;
+        for (let i = 0; i < spots.length; i += MAX_SPOTS_PER_PASS) {
+          cur = this.runPass(HEAL_PASS, params, ctx, { uInput: cur }, { spots: spots.slice(i, i + MAX_SPOTS_PER_PASS) });
+        }
+
+        // 2. PRE (calibration, WB, exposure, lens vignetting) → 3. DEVELOP.
+        const pre = this.runPass(PRE_PASS, params, ctx, { uInput: cur });
+        cur = this.runPass(DEVELOP_PASS, params, ctx, { uInput: pre, uPre: pre, uCurveLut: this.curveLut(params) });
+
+        // 4. DETAIL (display-referred).
+        for (const pass of DETAIL_STAGE) cur = this.runPass(pass, params, ctx, { uInput: cur });
+        if (useCache) this.setStage('stageA', keyA, cur, new Set(this.scratch));
+      }
+
+      // 5. LOCAL adjustments, one pass per visible mask.
+      for (const { mask, tex } of maskTextures) {
+        cur = this.runPass(LOCAL_PASS, params, ctx, { uInput: cur, uMask: tex }, { mask });
+      }
+      if (useCache) this.setStage('stageB', keyB, cur, new Set(this.scratch));
     }
 
     // 6. GEOMETRY → output space.
@@ -221,10 +296,11 @@ export class Pipeline {
     // 7. EFFECTS (output space).
     for (const pass of EFFECTS_STAGE) out = this.runPass(pass, params, octx, { uInput: out });
 
-    // Make sure the result is a texture we own (not the working image itself).
-    if (out === img.tex) out = this.copy(out);
+    // The result goes to an output slot that the engine releases later: never hand out
+    // the working image or a cached stage texture.
+    if (out === img.tex || this.isCached(out)) out = this.copy(out);
 
-    for (const t of this.scratch) if (t !== out) env.pool.release(t);
+    for (const t of this.scratch) if (t !== out && !this.isCached(t)) env.pool.release(t);
     this.scratch = [];
     this.blur.endFrame();
     return { out, overlay };

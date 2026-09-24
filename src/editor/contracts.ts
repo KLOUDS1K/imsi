@@ -268,6 +268,11 @@ export interface RenderOptions {
   ignoreCrop?: boolean;
   /** 'draft' while dragging: lower resolution and skip expensive passes (AI denoise, big blurs). */
   quality?: 'draft' | 'full';
+  /**
+   * Zoomed in beyond the proxy's resolution: render from the full-resolution
+   * source given to setDetailSource() (ignored in draft quality or when none is set).
+   */
+  detail?: boolean;
 }
 
 /** Maps a view to canvas CSS pixels: canvasX = offsetX + outX * scale (outX in output pixels). */
@@ -312,6 +317,8 @@ export interface Engine {
   readonly caps: EngineCaps;
   setSource(src: SourceImage): Promise<void>;
   getSource(): SourceImage | null;
+  /** Full-resolution version of the current source, used for RenderOptions.detail renders (null clears it). */
+  setDetailSource?(src: SourceImage | null): void;
   setMaskProvider(p: MaskProvider | null): void;
   setPatchProvider(p: PatchProvider | null): void;
   /** Size of the uncropped frame / cropped output, in source-proxy pixels. */

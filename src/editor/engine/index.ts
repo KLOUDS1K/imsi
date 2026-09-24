@@ -86,7 +86,11 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   });
 
   const previewLimit = defaultPreviewLimit(features.maxTextureSize);
+  // Zoomed-in renders use the full-resolution source, capped to keep GPU memory in check.
+  const nav = globalThis.navigator as (Navigator & { deviceMemory?: number }) | undefined;
+  const detailLimit = Math.min(features.maxTextureSize, (nav?.deviceMemory ?? 8) <= 4 ? 4096 : 6144);
   let source: SourceImage | null = null;
+  let detailSource: SourceImage | null = null;
   let image: WorkingImage | null = null;
   let maskProvider: MaskProvider | null = null;
   let patchProvider: PatchProvider | null = null;
@@ -119,7 +123,8 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
 
   const workingImage = (): WorkingImage | null => {
     if (!source) return null;
-    if (!image) image = sources.get(source, previewLimit);
+    // Always go through the cache (cheap lookup): a detail upload may have evicted the proxy.
+    image = sources.get(source, previewLimit);
     return image;
   };
 
@@ -270,6 +275,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
       if (source && source.id !== src.id) pipeline.clearPhotoCaches();
       source = src;
       image = null;
+      detailSource = null;
       setGeometryMeta(src.meta);
       for (const s of slots.values()) releaseSlot(s);
       slots.clear();
@@ -277,6 +283,10 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     },
 
     getSource: () => source,
+    setDetailSource(src) {
+      // Only accept a full-resolution version of the photo currently shown.
+      detailSource = src && source && src.id === source.id && src.width > source.width ? src : null;
+    },
     setMaskProvider(p) {
       maskProvider = p;
     },
@@ -298,7 +308,12 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
       const t0 = performance.now();
       const target: Target = opts.target ?? 'main';
       const quality = opts.quality ?? 'full';
-      const img = quality === 'draft' ? sources.reduced(full, Math.max(512, Math.round(previewLimit / 2))) : full;
+      const img =
+        quality === 'draft'
+          ? sources.reduced(full, Math.max(512, Math.round(previewLimit / 2)))
+          : opts.detail && detailSource
+            ? sources.get(detailSource, detailLimit)
+            : full;
       const ignoreCrop = !!opts.ignoreCrop;
       const overlayMask = target === 'main' && overlayMaskId ? params.masks.find((m) => m.id === overlayMaskId) ?? null : null;
       const res = pipeline.run(img, params, { quality, ignoreCrop, maskProvider, patchProvider, overlayMask });
@@ -403,7 +418,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
       const own = uploadSource(env, src, features.maxTextureSize);
       opts.onProgress?.(0.1);
       try {
-        const res = pipeline.run(own, params, { quality: 'full', ignoreCrop: false, maskProvider, patchProvider, overlayMask: null });
+        const res = pipeline.run(own, params, { quality: 'full', ignoreCrop: false, maskProvider, patchProvider, overlayMask: null, noCache: true });
         if (res.overlay) env.pool.release(res.overlay);
         opts.onProgress?.(0.6);
         const W = Math.max(1, Math.round(opts.width));
@@ -455,7 +470,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
       const full = workingImage();
       if (!full) throw new Error('No photo loaded.');
       const img = sources.reduced(full, Math.max(256, Math.min(previewLimit, maxSize * 2)));
-      const res = pipeline.run(img, params, { quality: 'full', ignoreCrop: false, maskProvider, patchProvider, overlayMask: null });
+      const res = pipeline.run(img, params, { quality: 'full', ignoreCrop: false, maskProvider, patchProvider, overlayMask: null, noCache: true });
       if (res.overlay) env.pool.release(res.overlay);
       const { w, h } = fitInside(res.out.width, res.out.height, maxSize);
       const small = resampleTexture(env, res.out, w, h, { encoded: true, format: 'rgba8', opaque: true });

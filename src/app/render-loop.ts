@@ -56,9 +56,22 @@ interface SlotKey {
   quality: 'draft' | 'full' | null;
   ignoreCrop: boolean;
   version: number;
+  detail: boolean;
 }
 
-const emptyKey = (): SlotKey => ({ doc: null, params: null, quality: null, ignoreCrop: false, version: -1 });
+const emptyKey = (): SlotKey => ({ doc: null, params: null, quality: null, ignoreCrop: false, version: -1, detail: false });
+
+/**
+ * Does the current zoom show more device pixels per image pixel than the
+ * preview proxy has? Then a full-resolution ("detail") render is worth it.
+ */
+function needsDetail(engine: NonNullable<AppContext['engine']>, doc: EditorDocument, view: AppContext['view']['value']): boolean {
+  const src = doc.source;
+  if (view.zoom === 'fit' || !(src.fullWidth > src.width * 1.15)) return false;
+  const t = engine.getDisplayTransform(view);
+  const dpr = globalThis.devicePixelRatio || 1;
+  return t.scale * dpr > (src.width / src.fullWidth) * 1.15;
+}
 
 /**
  * "Before" params that share the current geometry. Geometric lens fields are
@@ -91,6 +104,9 @@ export function createRenderLoop(ctx: AppContext, deps: RenderLoopDeps): RenderL
   let lastHistAt = 0;
   let lastChangeAt = 0;
   let errorReported = false;
+  /** Photo whose full-resolution source the engine currently holds / is loading. */
+  let detailDoc: EditorDocument | null = null;
+  let detailLoading: EditorDocument | null = null;
   /** Memo for the aligned "before" params (avoid re-rendering compare when nothing changed). */
   let beforeMemo: { src: EditParams | null; cur: EditParams; isRaw: boolean; out: EditParams } | null = null;
 
@@ -171,11 +187,36 @@ export function createRenderLoop(ctx: AppContext, deps: RenderLoopDeps): RenderL
       const quality: 'draft' | 'full' = interactive && now - lastChangeAt < FULL_AFTER_MS - 8 ? 'draft' : 'full';
       const view = ctx.view.value;
 
-      if (changed || (main.quality === 'draft' && quality === 'full')) {
+      // Full-resolution detail when zoomed in past the proxy (loaded once per photo, in the background).
+      if (detailDoc && detailDoc !== doc) {
+        engine.setDetailSource?.(null);
+        detailDoc = null;
+      }
+      let detail = false;
+      if (quality === 'full' && engine.setDetailSource && needsDetail(engine, doc, view)) {
+        if (detailDoc === doc) detail = true;
+        else if (detailLoading !== doc) {
+          detailLoading = doc;
+          void doc.decoded
+            .loadFull()
+            .then((full) => {
+              if (disposed || ctx.doc.value !== doc) return;
+              engine.setDetailSource?.(full);
+              detailDoc = doc;
+              request();
+            })
+            .catch((err: unknown) => console.warn('[kloud] full-resolution decode failed', err))
+            .finally(() => {
+              if (detailLoading === doc) detailLoading = null;
+            });
+        }
+      }
+
+      if (changed || (main.quality === 'draft' && quality === 'full') || main.detail !== detail) {
         const t0 = performance.now();
-        engine.render(params, { target: 'main', quality, ignoreCrop });
+        engine.render(params, { target: 'main', quality, ignoreCrop, detail });
         const ms = performance.now() - t0;
-        main = { doc, params, quality, ignoreCrop, version };
+        main = { doc, params, quality, ignoreCrop, version, detail };
         deps.onStats?.({ ms, quality });
         scheduleHistogram(quality);
       }
@@ -192,7 +233,7 @@ export function createRenderLoop(ctx: AppContext, deps: RenderLoopDeps): RenderL
           (compare.quality === 'draft' && cq === 'full');
         if (compareStale) {
           engine.render(before, { target: 'compare', quality: cq, ignoreCrop });
-          compare = { doc, params: before, quality: cq, ignoreCrop, version };
+          compare = { doc, params: before, quality: cq, ignoreCrop, version, detail: false };
         }
       }
 

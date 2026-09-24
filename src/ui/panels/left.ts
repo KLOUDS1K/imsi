@@ -20,6 +20,23 @@ export function createDevelopLeftPanel(ctx: AppContext, opts: { navigator?: HTML
   /* ------------------------------ presets ------------------------------ */
   let lastApplied: { preset: Preset; base: EditParams } | null = null;
   const presetList = h('div', { class: 'k-pnl-list' });
+  // Live preview on hover, delegated so it survives re-renders under a still pointer.
+  let hoveredId: string | null = null;
+  const previewFor = (id: string | null) => {
+    if (id === hoveredId) return;
+    hoveredId = id;
+    const params = b.params;
+    const preset = id ? allPresets().find((x) => x.id === id) : undefined;
+    ctx.previewParams.set(preset && params ? applyPreset(params, preset, 100) : null);
+  };
+  presetList.addEventListener('pointerover', (e) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>('.k-pnl-preset');
+    previewFor(row?.dataset.presetId ?? null);
+  });
+  presetList.addEventListener('pointerleave', () => previewFor(null));
+  d.add(() => {
+    if (hoveredId) ctx.previewParams.set(null);
+  });
   const amount = createSlider({
     label: 'Amount',
     min: 0,
@@ -45,6 +62,9 @@ export function createDevelopLeftPanel(ctx: AppContext, opts: { navigator?: HTML
   const apply = (p: Preset) => {
     const store = b.store;
     if (!store) return;
+    // Treat the applied preset as "already hovered": the list re-renders under the still
+    // pointer and the browser re-fires pointerover, which must not preview it on top of itself.
+    hoveredId = p.id;
     ctx.previewParams.set(null);
     const base = store.params;
     lastApplied = { preset: p, base };
@@ -113,11 +133,7 @@ export function createDevelopLeftPanel(ctx: AppContext, opts: { navigator?: HTML
             onkeydown: (e: KeyboardEvent) => {
               if (e.key === 'Enter') apply(p);
             },
-            onpointerenter: () => {
-              const params = b.params;
-              if (params) ctx.previewParams.set(applyPreset(params, p, 100));
-            },
-            onpointerleave: () => ctx.previewParams.set(null),
+            dataset: { presetId: p.id },
             oncontextmenu: (e: MouseEvent) => {
               e.preventDefault();
               openMenu({ x: e.clientX, y: e.clientY } as never, presetMenu(p));

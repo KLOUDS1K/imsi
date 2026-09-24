@@ -178,7 +178,8 @@ export function createRenderLoop(ctx: AppContext, deps: RenderLoopDeps): RenderL
     try {
       const params = ctx.previewParams.value ?? doc.store.params;
       const ignoreCrop = ctx.tool.value === 'crop';
-      const interactive = doc.store.gestureActive;
+      // Hover previews (presets, style strength) are interactive too: draft first, full when the pointer rests.
+      const interactive = doc.store.gestureActive || !!ctx.previewParams.value;
       const now = performance.now();
       const changed = main.doc !== doc || main.params !== params || main.ignoreCrop !== ignoreCrop || main.version !== version;
       if (changed) lastChangeAt = now;

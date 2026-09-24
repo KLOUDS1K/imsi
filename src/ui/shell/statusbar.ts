@@ -113,6 +113,8 @@ export function createAppStatusBar(rt: AppRuntime): AppStatusBar {
   d.add(() => cancelAnimationFrame(zoomRaf));
   d.add(ctx.view.subscribe(queueZoom));
   d.add(ctx.doc.subscribe(queueZoom));
+  // The fit scale is only known once the viewer has sized the canvas and the first frame rendered.
+  if (ctx.engine) d.add(ctx.engine.onRendered(() => queueZoom()));
   // The viewport size changes the fit scale.
   const ro = new ResizeObserver(queueZoom);
   ro.observe(document.documentElement);

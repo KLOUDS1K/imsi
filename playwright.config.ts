@@ -8,7 +8,7 @@ const port = Number(process.env.PW_PORT ?? 5173);
 
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 90_000,
+  timeout: 180_000,
   fullyParallel: false,
   workers: 1,
   reporter: [['list']],

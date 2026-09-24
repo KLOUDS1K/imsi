@@ -133,7 +133,9 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   }
   if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return true;
   if (target instanceof HTMLElement && target.isContentEditable) return true;
-  return !!target.closest('.k-dialog-layer, .k-menu, .k-popover, [role="menu"], [role="listbox"]');
+  // Popup lists own their arrow keys. A plain role="listbox" (the photo grid, the
+  // filmstrip) must NOT swallow shortcuts: rating / flag keys are pressed while it has focus.
+  return !!target.closest('.k-dialog-layer, .k-menu, .k-popover, [role="menu"], .k-popover [role="listbox"]');
 }
 
 export interface KeyboardOptions {

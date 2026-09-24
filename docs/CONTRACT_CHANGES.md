@@ -62,3 +62,17 @@ Append-only. Prefix each entry with the module name.
 - [ui-kit] For the shell: `ctx.toast` / `ctx.confirm` / `ctx.prompt` map 1:1 onto `createToaster().show`,
   `confirmDialog(ConfirmOptions)` and `promptDialog(PromptOptions)` from `@/ui/kit`; `ctx.busy` can feed
   `createBusyLine().set` directly (same `{ active, label?, progress? }` shape).
+
+- [library] Clarifications / optional extensions (no contract signature changes):
+  - `openDB(opts?)` never rejects; it returns a `KloudDBExt` (`backend: 'indexeddb' | 'memory'`, `getMany`, atomic
+    multi-store `batch`, `close`). Use `backendOf(db) === 'memory'` to warn that nothing survives a reload.
+  - `new AutosaveManager(db, { save })`: the shell should pass `save: (id, s) => lib.saveEdit(id, s)` so
+    `PhotoRecord.hasEdits/editedAt` stay in sync (the default writes 'edits' directly).
+  - `importFiles` never rejects for a bad file: `onProgress` receives an `ImportProgressDetail` (superset of
+    ImportProgress with `imported/duplicates/failed/errors`), and `lib.lastImportReport` holds duplicates, unsupported,
+    failed and warnings. Abort resolves with the photos imported so far.
+  - Batch: `pasteSettings(target, clip, { meta? })` re-fits an aspect-locked crop when the target meta is given;
+    `syncSettings` / `batchApplyPreset` / `applyPrevious` take trailing optional `onProgress` (applyPrevious) and
+    `BatchOptions` (`signal`, `onApplied(id, state)` to reload the photo open in the editor, `cropValidator`). They
+    append one history step per target, never copy AI mask bitmap keys or removal patches between photos, and throw
+    a `BatchError` (with `failures`) after processing the remaining targets when some failed.

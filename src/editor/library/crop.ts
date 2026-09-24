@@ -15,7 +15,9 @@
  *   (1, At/r) when r ≥ At, else (r/At, 1); the new rect is s times that,
  *   centred where the source crop was centred, shifted to stay inside.
  *
- * The mapping is idempotent for equal frames. When `crop.constrainToImage` is
+ * A rect that already has the locked aspect on the target frame (photos of
+ * the same shape) and 'original' crops (frame-relative by definition) are
+ * copied verbatim, so the mapping is idempotent for equal frames. When `crop.constrainToImage` is
  * on and the target is straightened/transformed, the rect is additionally
  * shrunk about its centre until it lies on valid image data, using the
  * engine's CPU geometry mirror when it is available.
@@ -54,9 +56,13 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 /** Re-fit a (source) crop rect onto a target frame; see the module comment. */
 export function refitCropRect(crop: CropParams, frameW: number, frameH: number): Rect {
   const rect: Rect = { x: crop.x, y: crop.y, w: crop.w, h: crop.h };
+  // 'original' is frame-relative: in normalized coords it is the same rect on every frame.
+  if (crop.aspect === 'original') return rect;
   const r = cropAspect(crop, frameW, frameH);
   if (r === null || !(frameW > 0 && frameH > 0) || !(rect.w > 0 && rect.h > 0)) return rect;
   const at = frameW / frameH;
+  // Already of the locked aspect on this frame (same-shaped photos): copy verbatim.
+  if (Math.abs((rect.w * at) / rect.h - r) <= 1e-3 * r) return rect;
   const s = Math.min(1, Math.max(rect.w, rect.h));
   const maxW = r >= at ? 1 : r / at;
   const maxH = r >= at ? at / r : 1;

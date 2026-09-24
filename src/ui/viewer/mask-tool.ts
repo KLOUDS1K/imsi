@@ -175,6 +175,11 @@ export function createMaskTool(host: ViewerHost): ViewerTool {
   function targetOf(p: EditParams, kind: MaskComponentKind): Loc | null {
     const sel = selected(p);
     if (sel && sel.kind === kind) return locate(p, sel.id);
+    // Nothing selected: sample into the most recent component of this kind in the active
+    // mask (e.g. the empty one "Create new mask → Range → Color" just added).
+    const mi = activeIndex(p);
+    const comps = mi >= 0 ? p.masks[mi]?.components ?? [] : [];
+    for (let i = comps.length - 1; i >= 0; i--) if (comps[i].kind === kind) return locate(p, comps[i].id);
     return null;
   }
 

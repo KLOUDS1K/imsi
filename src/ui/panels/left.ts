@@ -254,6 +254,16 @@ export function createDevelopLeftPanel(ctx: AppContext, opts: { navigator?: HTML
   d.add(() => addSnap.destroy());
   const snapshots = createSection({ id: 'develop.snapshots', title: 'Snapshots', open: false, persist: true, actions: [addSnap.el] });
   snapshots.body.append(snapList);
+  // Reveal the list when a snapshot is added (it is collapsed by default).
+  let snapCount = -1;
+  d.add(
+    b.watch(null, () => {
+      const n = b.store?.snapshots.length ?? 0;
+      if (snapCount >= 0 && n > snapCount && !snapshots.isOpen()) snapshots.setOpen(true);
+      snapCount = n;
+    }),
+  );
+  d.add(b.onDoc(() => (snapCount = b.store?.snapshots.length ?? 0)));
 
   /* ------------------------------ history ------------------------------ */
   const histList = h('div', { class: 'k-pnl-list' });

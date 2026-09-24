@@ -1,0 +1,167 @@
+/*
+ * KLOUD theme tokens — matched to kloud.photography (Archive view, 2026-09).
+ *
+ * The site is a Finder-style archive: warm off-white (light) / near-black
+ * (dark) surfaces, hairline borders, a plain grotesque (Inter / system),
+ * tiny letter-spaced uppercase labels, and folder-yellow as the only accent.
+ *
+ * Every component styles itself through these tokens ONLY. To re-skin the
+ * editor when it is merged into the site project, edit this file (or map these
+ * variables onto the site's own variables) — nothing else needs to change.
+ *
+ * Theme switching: <html data-theme="light|dark">. With no attribute the
+ * OS preference decides (same behaviour as the site's sun/moon toggle).
+ */
+:root {
+  color-scheme: light;
+
+  /* Type */
+  --k-font: 'Inter', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo',
+    'Noto Sans KR', system-ui, sans-serif;
+  --k-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --k-fs-2xs: 10px;
+  --k-fs-xs: 11px;
+  --k-fs-sm: 12px;
+  --k-fs: 13px;
+  --k-fs-md: 14px;
+  --k-fs-lg: 17px;
+  --k-fs-xl: 24px;
+  --k-fw-regular: 400;
+  --k-fw-medium: 500;
+  --k-fw-semibold: 600;
+  --k-fw-bold: 700;
+  /* uppercase section labels ("FOLDERS") */
+  --k-label-tracking: 0.12em;
+  /* ".PHOTOGRAPHY" part of the wordmark */
+  --k-wordmark-tracking: 0.22em;
+
+  /* Surfaces (light) */
+  --k-bg: #f4f3f0; /* main content area */
+  --k-sidebar: #fafaf9; /* left sidebar / toolbars */
+  --k-toolbar: #fafaf9;
+  --k-surface: #ffffff; /* raised: popovers, active segment, cards */
+  --k-surface-2: #efeeea; /* inputs, search pill, count badges */
+  --k-surface-3: #e7e5e0; /* hover */
+  --k-overlay: rgba(20, 20, 18, 0.38); /* modal scrim */
+  --k-canvas: #e4e3e0; /* photo viewport background (near-neutral) */
+
+  /* Lines */
+  --k-border: #e6e4df;
+  --k-border-strong: #d4d1ca;
+
+  /* Text */
+  --k-text: #1b1b1c;
+  --k-text-2: #46464a;
+  --k-text-muted: #77766f;
+  --k-text-faint: #a9a79f;
+
+  /* Accent: folder yellow */
+  --k-accent: #f2c230;
+  --k-accent-strong: #e0aa14;
+  --k-accent-soft: rgba(242, 194, 48, 0.18);
+  --k-accent-ink: #8f6b0c; /* lock glyphs, accent text on light */
+  --k-on-accent: #1b1b1c;
+  --k-folder-top: #f0bd3f;
+  --k-folder-front-a: #ffdb62;
+  --k-folder-front-b: #f8c11c;
+
+  /* Semantic */
+  --k-danger: #d4473f;
+  --k-success: #3b9a5a;
+  --k-info: #3a7bd5;
+  --k-clip-high: #ff3b30;
+  --k-clip-low: #2f7dff;
+  --k-mask-overlay: rgba(255, 64, 64, 0.45);
+  --k-label-red: #e5484d;
+  --k-label-yellow: #f2c230;
+  --k-label-green: #46a758;
+  --k-label-blue: #3e8ae8;
+  --k-label-purple: #8e4ec6;
+
+  /* Shape & depth */
+  --k-radius-xs: 4px;
+  --k-radius-sm: 6px;
+  --k-radius: 8px;
+  --k-radius-lg: 12px;
+  --k-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --k-shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --k-focus-ring: 0 0 0 2px var(--k-bg), 0 0 0 4px rgba(224, 170, 20, 0.6);
+
+  /* Layout */
+  --k-toolbar-h: 44px;
+  --k-statusbar-h: 26px;
+  --k-sidebar-w: 216px;
+  --k-panel-w: 312px;
+  --k-filmstrip-h: 92px;
+  --k-gap: 12px;
+
+  /* Motion */
+  --k-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --k-dur: 140ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --k-bg: #0e0e10;
+    --k-sidebar: #0e0e10;
+    --k-toolbar: #0e0e10;
+    --k-surface: #1a1a1d;
+    --k-surface-2: #1b1b1e;
+    --k-surface-3: #26262a;
+    --k-overlay: rgba(0, 0, 0, 0.6);
+    --k-canvas: #09090a;
+    --k-border: #1f1f23;
+    --k-border-strong: #2f2f34;
+    --k-text: #f2f2f3;
+    --k-text-2: #c9c9cd;
+    --k-text-muted: #8b8b91;
+    --k-text-faint: #5c5c62;
+    --k-accent: #e9b92c;
+    --k-accent-strong: #d29f14;
+    --k-accent-soft: rgba(233, 185, 44, 0.16);
+    --k-accent-ink: #e0b240;
+    --k-on-accent: #141414;
+    --k-folder-top: #c9921f;
+    --k-folder-front-a: #efc437;
+    --k-folder-front-b: #d7a312;
+    --k-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --k-shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.5);
+    --k-focus-ring: 0 0 0 2px var(--k-bg), 0 0 0 4px rgba(233, 185, 44, 0.6);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --k-bg: #0e0e10;
+  --k-sidebar: #0e0e10;
+  --k-toolbar: #0e0e10;
+  --k-surface: #1a1a1d;
+  --k-surface-2: #1b1b1e;
+  --k-surface-3: #26262a;
+  --k-overlay: rgba(0, 0, 0, 0.6);
+  --k-canvas: #09090a;
+  --k-border: #1f1f23;
+  --k-border-strong: #2f2f34;
+  --k-text: #f2f2f3;
+  --k-text-2: #c9c9cd;
+  --k-text-muted: #8b8b91;
+  --k-text-faint: #5c5c62;
+  --k-accent: #e9b92c;
+  --k-accent-strong: #d29f14;
+  --k-accent-soft: rgba(233, 185, 44, 0.16);
+  --k-accent-ink: #e0b240;
+  --k-on-accent: #141414;
+  --k-folder-top: #c9921f;
+  --k-folder-front-a: #efc437;
+  --k-folder-front-b: #d7a312;
+  --k-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --k-shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.5);
+  --k-focus-ring: 0 0 0 2px var(--k-bg), 0 0 0 4px rgba(233, 185, 44, 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --k-dur: 0ms;
+  }
+}

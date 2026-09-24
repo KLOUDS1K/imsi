@@ -93,7 +93,7 @@ export async function encodePixels(px: PixelBufferU8, type = 'image/png', qualit
   const c = createCanvas(px.width, px.height);
   const ctx = context2d(c, 'srgb', false);
   const data = new ImageData(new Uint8ClampedArray(px.data.buffer as ArrayBuffer, px.data.byteOffset, px.data.length), px.width, px.height);
-  if (type === 'image/jpeg') {
+  if (type === 'image/jpeg' && hasTransparency(px.data)) {
     // JPEG has no alpha: composite over white like every photo app does.
     const tmp = createCanvas(px.width, px.height);
     context2d(tmp, 'srgb', false).putImageData(data, 0, 0);
@@ -104,4 +104,9 @@ export async function encodePixels(px: PixelBufferU8, type = 'image/png', qualit
     ctx.putImageData(data, 0, 0);
   }
   return canvasToBlob(c, type, quality);
+}
+
+function hasTransparency(d: Uint8ClampedArray): boolean {
+  for (let i = 3; i < d.length; i += 4) if (d[i] !== 255) return true;
+  return false;
 }

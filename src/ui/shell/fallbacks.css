@@ -1,0 +1,98 @@
+/* Stand-in views used only when a feature module could not be loaded. */
+
+.k-unavail {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  height: 100%;
+  min-height: 120px;
+  padding: 24px;
+  text-align: center;
+}
+
+.k-unavail__title {
+  margin: 0;
+  color: var(--k-text-2);
+  font-weight: var(--k-fw-semibold);
+}
+
+.k-unavail__detail {
+  margin: 0 auto;
+  max-width: 36ch;
+  color: var(--k-text-muted);
+  font-size: var(--k-fs-sm);
+}
+
+.k-fb-library {
+  height: 100%;
+  padding: 24px 24px 40px;
+}
+
+.k-fb-library .k-divider {
+  margin: 16px 0 20px;
+}
+
+.k-fb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 18px 16px;
+  margin-top: 12px;
+}
+
+.k-fb-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--k-text);
+  text-align: left;
+}
+
+.k-fb-tile__frame {
+  display: block;
+  aspect-ratio: 4 / 3;
+  margin-bottom: 6px;
+  overflow: hidden;
+  border-radius: var(--k-radius);
+  background: var(--k-surface-2);
+  box-shadow: 0 0 0 1px var(--k-border);
+}
+
+.k-fb-tile.is-selected .k-fb-tile__frame {
+  box-shadow: 0 0 0 2px var(--k-accent);
+}
+
+.k-fb-tile__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.k-fb-tile__name {
+  font-size: var(--k-fs);
+  font-weight: var(--k-fw-semibold);
+}
+
+.k-fb-tile__sub {
+  color: var(--k-text-muted);
+  font-size: var(--k-fs-xs);
+}
+
+.k-fb-viewer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--k-canvas);
+}
+
+.k-fb-viewer > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}

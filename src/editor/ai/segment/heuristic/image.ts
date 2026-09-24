@@ -135,9 +135,9 @@ export function boxBlur(src: Float32Array, w: number, h: number, r: number, out 
   return out;
 }
 
-/** ~Gaussian blur by three box passes (σ ≈ r·√(3·(… )/3)). */
+/** ~Gaussian blur by three box passes (variance of 3 boxes of radius r = ((2r+1)² − 1) / 4). */
 export function gaussBlur(src: Float32Array, w: number, h: number, sigma: number): Float32Array {
-  const r = Math.max(1, Math.round(Math.sqrt((12 * sigma * sigma) / 3 + 1) / 2));
+  const r = Math.max(1, Math.round((Math.sqrt(4 * sigma * sigma + 1) - 1) / 2));
   const a = boxBlur(src, w, h, r);
   const b = boxBlur(a, w, h, r);
   return boxBlur(b, w, h, r, a);

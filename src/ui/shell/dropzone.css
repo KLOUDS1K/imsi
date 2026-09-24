@@ -1,0 +1,54 @@
+/* Full-window "Drop to import" overlay. */
+
+.k-drop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--k-overlay);
+  pointer-events: none;
+  animation: k-drop-in var(--k-dur) var(--k-ease);
+}
+
+.k-drop[hidden] {
+  display: none;
+}
+
+.k-drop__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 40px 26px;
+  border: 1.5px dashed var(--k-accent);
+  border-radius: var(--k-radius-lg);
+  background: var(--k-surface);
+  box-shadow: var(--k-shadow-pop);
+  text-align: center;
+}
+
+.k-drop__art {
+  width: 132px;
+  margin-bottom: 6px;
+}
+
+.k-drop__title {
+  margin: 0;
+  color: var(--k-text);
+  font-size: var(--k-fs-lg);
+  font-weight: var(--k-fw-semibold);
+}
+
+.k-drop__sub {
+  margin: 0;
+  color: var(--k-text-muted);
+  font-size: var(--k-fs-sm);
+}
+
+@keyframes k-drop-in {
+  from {
+    opacity: 0;
+  }
+}

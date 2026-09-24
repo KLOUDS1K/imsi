@@ -32,7 +32,7 @@ export function fileExtension(format: ExportSettings['format']): string {
 
 /** Characters illegal on Windows / macOS / Linux file systems, plus control chars. */
 // eslint-disable-next-line no-control-regex
-const ILLEGAL = /[<>:"/\\|?*\u0000-\u001f\u007f]/g;
+const ILLEGAL = /[<>:"/\\|?*\u0000-\u001f\u007f]+/g;
 const RESERVED = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\..*)?$/i;
 const MAX_STEM = 180;
 

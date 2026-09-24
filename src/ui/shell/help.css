@@ -1,0 +1,49 @@
+/* Keyboard shortcuts overlay. */
+
+.k-help__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.k-help__groups {
+  columns: 2 260px;
+  column-gap: 28px;
+}
+
+.k-help__group {
+  break-inside: avoid;
+  margin-bottom: 16px;
+}
+
+.k-help__title {
+  margin: 0 0 6px;
+}
+
+.k-help__list {
+  margin: 0;
+}
+
+.k-help__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 26px;
+  border-bottom: 1px solid var(--k-border);
+}
+
+.k-help__label {
+  min-width: 0;
+  color: var(--k-text-2);
+  font-size: var(--k-fs-sm);
+}
+
+.k-help__keys {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  margin: 0;
+}

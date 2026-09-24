@@ -97,7 +97,9 @@ export function photo(w: number, h: number, seed = 7): Float32Array {
     const u = Math.max(rnd(), 1e-9);
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rnd());
   };
-  const put = (x: number, y: number, c: Rgb) => d.set([c[0], c[1], c[2], 1], (y * w + x) * 4);
+  const put = (x: number, y: number, c: Rgb) => {
+    if (x >= 0 && y >= 0 && x < w && y < h) d.set([c[0], c[1], c[2], 1], (y * w + x) * 4);
+  };
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       let c: Rgb;
@@ -171,5 +173,59 @@ export function photo(w: number, h: number, seed = 7): Float32Array {
       d[i * 4 + k] = Math.max(0, v + gauss() * (0.0015 + 0.012 * Math.sqrt(Math.max(v, 0))));
     }
   }
+  return d;
+}
+
+/**
+ * Hue sweep (x = hue 0..360 in sRGB-encoded HSV). Top half: saturation 1 → 0
+ * downwards at V = 1; bottom half: V 1 → 0.05 at S = 0.85. Linear output.
+ */
+export function hueSweep(w: number, h: number): Float32Array {
+  const d = new Float32Array(w * h * 4);
+  const half = h / 2;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const hue = (x / w) * 360;
+      const s = y < half ? 1 - y / half : 0.85;
+      const v = y < half ? 1 : 1 - 0.95 * ((y - half) / half);
+      const hp = hue / 60;
+      const c = v * s;
+      const xx = c * (1 - Math.abs((hp % 2) - 1));
+      let rgb: Rgb;
+      if (hp < 1) rgb = [c, xx, 0];
+      else if (hp < 2) rgb = [xx, c, 0];
+      else if (hp < 3) rgb = [0, c, xx];
+      else if (hp < 4) rgb = [0, xx, c];
+      else if (hp < 5) rgb = [xx, 0, c];
+      else rgb = [c, 0, xx];
+      const m = v - c;
+      d.set([srgbToLinear(rgb[0] + m), srgbToLinear(rgb[1] + m), srgbToLinear(rgb[2] + m), 1], (y * w + x) * 4);
+    }
+  return d;
+}
+
+/**
+ * Resolution-independent scene (everything defined in normalized coords, no
+ * per-pixel noise): the same picture at any size, for scale-invariance tests.
+ */
+export function scene(w: number, h: number): Float32Array {
+  const d = new Float32Array(w * h * 4);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const u = (x + 0.5) / w;
+      const v = (y + 0.5) / h;
+      let c: Rgb;
+      if (v < 0.55) {
+        const cl = 0.12 * Math.max(0, Math.sin(2 * Math.PI * (3 * u + 2 * v)) * Math.sin(2 * Math.PI * 5 * v));
+        c = [0.18 + 0.5 * v + cl, 0.28 + 0.45 * v + cl, 0.7 + 0.1 * v + cl];
+        if (u > 0.25 && u < 0.35 && v > 0.1 && v < 0.2) c = [2.5, 2.4, 2.2];
+      } else {
+        const t = 0.5 + 0.5 * Math.sin(2 * Math.PI * 40 * u) * Math.sin(2 * Math.PI * 25 * v);
+        c = [0.03 + 0.03 * t, 0.06 + 0.05 * t, 0.02 + 0.02 * t];
+      }
+      if (u > 0.6 && u < 0.75 && v > 0.2 && v < 0.55) c = [0.01, 0.01, 0.012];
+      if (u > 0.1 && u < 0.2 && v > 0.7 && v < 0.85) c = [0.4, 0.25, 0.18];
+      d.set([c[0], c[1], c[2], 1], (y * w + x) * 4);
+    }
   return d;
 }

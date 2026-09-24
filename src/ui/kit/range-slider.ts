@@ -78,7 +78,7 @@ export function createRangeSlider(opts: RangeSliderOptions): RangeSlider {
 
   const fmt = (v: number): string => opts.format?.(v) ?? formatNumber(v, decimals, min < 0) + (opts.unit ?? '');
   const labelId = kitId('k-range-label');
-  const label = h('span', { class: 'k-range__label', id: labelId, title: 'Double-click to reset' }, opts.label ?? '');
+  const label = h('span', { class: 'k-range__label', id: labelId }, opts.label ?? '');
   const readout = h('span', { class: 'k-range__value k-num', attrs: { 'aria-hidden': 'true' } });
   const rail = h('div', { class: 'k-range__rail' });
   const fill = h('div', { class: 'k-range__fill' });

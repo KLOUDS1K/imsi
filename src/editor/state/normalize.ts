@@ -23,7 +23,7 @@ import type {
 } from '@/editor/types';
 import { AI_MASK_TARGETS, HSL_CHANNELS } from '@/editor/types';
 import { getPath, isPlainObject, joinPath, setPath, type PlainObject } from './paths';
-import { clampToSpec, CURVE_PATHS, ENUMS, MIN_CROP } from './specs';
+import { clampToSpec, ENUMS, MIN_CROP } from './specs';
 
 /* ------------------------------------------------------------------ */
 /* Primitive coercion                                                  */
@@ -96,8 +96,11 @@ export function fixConsistency(p: EditParams): EditParams {
   const c = p.crop;
   c.w = clampN(c.w, MIN_CROP, 1);
   c.h = clampN(c.h, MIN_CROP, 1);
-  c.x = clampN(c.x, 0, 1 - c.w);
-  c.y = clampN(c.y, 0, 1 - c.h);
+  // Tolerate float noise (0.8 + 0.2 may exceed 1 by an ulp) instead of nudging valid rects.
+  c.x = clampN(c.x, 0, 1);
+  c.y = clampN(c.y, 0, 1);
+  if (c.x + c.w > 1 + 1e-9) c.x = 1 - c.w;
+  if (c.y + c.h > 1 + 1e-9) c.y = 1 - c.h;
   const d = p.lens.defringe;
   if (d.purpleHueMin > d.purpleHueMax) [d.purpleHueMin, d.purpleHueMax] = [d.purpleHueMax, d.purpleHueMin];
   if (d.greenHueMin > d.greenHueMax) [d.greenHueMin, d.greenHueMax] = [d.greenHueMax, d.greenHueMin];
@@ -370,13 +373,15 @@ function normSpots(v: unknown): HealSpot[] {
     const x = toNum(s.x);
     const y = toNum(s.y);
     if (x === undefined || y === undefined) continue;
+    const cx = clampN(x, 0, 1);
+    const cy = clampN(y, 0, 1);
     out.push({
       id: uniqueId(typeof s.id === 'string' && s.id ? s.id : `spot-${out.length + 1}`, used),
       kind: oneOf(s.kind, ['heal', 'clone', 'content-aware'] as const, 'heal'),
-      x: clampN(x, 0, 1),
-      y: clampN(y, 0, 1),
-      sx: num(s.sx, x, 0, 1),
-      sy: num(s.sy, y, 0, 1),
+      x: cx,
+      y: cy,
+      sx: num(s.sx, cx, 0, 1),
+      sy: num(s.sy, cy, 0, 1),
       radius: num(s.radius, 0.02, 0.0005, 0.5),
       feather: num(s.feather, 50, 0, 100),
       opacity: num(s.opacity, 100, 0, 100),
@@ -468,9 +473,4 @@ function migrate(input: PlainObject): PlainObject {
     Object.assign(crop, { x: l, y: t, w: r - l, h: b - t });
   }
   return src;
-}
-
-/** Paths whose values are arrays that should be treated as leaves (replaced whole). */
-export function isArrayLeafPath(path: string): boolean {
-  return CURVE_PATHS.has(path) || path === 'crop.customAspect' || path === 'masks' || path.startsWith('retouch.');
 }

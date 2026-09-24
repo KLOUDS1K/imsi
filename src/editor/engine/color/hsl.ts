@@ -3,15 +3,17 @@
  *
  * Band weights are a partition of unity over the hue circle: between two
  * neighbouring centres the weight moves from one band to the other along a
- * raised cosine, so every band is exactly 1 at its own centre, 0 at its
- * neighbours' centres, and the weights are C1-smooth everywhere. Because
- * each transition spans the actual gap to the neighbour, the uneven spacing
- * (e.g. 30° red→orange vs 60° yellow→green) is respected.
+ * raised cosine, after a short plateau (HSL_PLATEAU of the gap) around each
+ * centre so a colour that is "blue" gets the whole blue slider. Every band is
+ * exactly 1 near its own centre and 0 at its neighbours' centres, and the
+ * weights are C1-smooth everywhere. Because each transition spans the actual
+ * gap to the neighbour, the uneven spacing (e.g. 30° red→orange vs 60°
+ * yellow→green) is respected.
  */
 import { hueDelta } from '../../color/math';
 import type { EditParams, HslChannel } from '../../types';
 import { HSL_CENTERS, HSL_CHANNELS } from '../../types';
-import { HSL_HUE_DEG, HSL_LUM_EV, glslFloat as f } from './constants';
+import { HSL_HUE_DEG, HSL_PLATEAU, glslFloat as f } from './constants';
 
 export interface HslBand {
   channel: HslChannel;
@@ -38,7 +40,9 @@ export const HSL_BANDS: readonly HslBand[] = HSL_CHANNELS.map((channel, i) => {
 export function hslBandWeight(h: number, band: HslBand): number {
   const d = hueDelta(band.centre, h);
   const t = d >= 0 ? d / band.gapNext : -d / band.gapPrev;
-  return t >= 1 ? 0 : 0.5 + 0.5 * Math.cos(Math.PI * t);
+  if (t >= 1) return 0;
+  const u = Math.min(Math.max((t - HSL_PLATEAU) / (1 - 2 * HSL_PLATEAU), 0), 1);
+  return 0.5 + 0.5 * Math.cos(Math.PI * u);
 }
 
 /** Weights of all 8 bands at hue h (degrees); they sum to 1. */
@@ -64,7 +68,7 @@ export function isHslIdentity(params: EditParams): boolean {
   });
 }
 
-/** Uniforms: per-band hue shift (deg), saturation (−1..1) and luminance (EV), packed as two vec4 each. */
+/** Uniforms: per-band hue shift (deg), saturation (−1..1) and luminance (−1..1), packed as two vec4 each. */
 export function hslUniforms(params: EditParams): Record<string, number[]> {
   const hue: number[] = [];
   const sat: number[] = [];
@@ -73,7 +77,7 @@ export function hslUniforms(params: EditParams): Record<string, number[]> {
     const v = params.hsl[band.channel];
     hue.push(hslHueShift(band, v.hue));
     sat.push(v.saturation / 100);
-    lum.push((v.luminance / 100) * HSL_LUM_EV);
+    lum.push(v.luminance / 100);
   });
   return {
     uHslHueA: hue.slice(0, 4),
@@ -92,7 +96,9 @@ export const GLSL_HSL = /* glsl */ `
 float hslBandW(float h, float c, float gp, float gn) {
   float d = hueDelta(c, h);
   float t = d >= 0.0 ? d / gn : -d / gp;
-  return t >= 1.0 ? 0.0 : 0.5 + 0.5 * cos(PI * t);
+  if (t >= 1.0) return 0.0;
+  float u = clamp((t - ${f(HSL_PLATEAU)}) / ${f(1 - 2 * HSL_PLATEAU)}, 0.0, 1.0);
+  return 0.5 + 0.5 * cos(PI * u);
 }
 void hslWeights(float h, out vec4 wa, out vec4 wb) {
   wa = vec4(${HSL_BANDS.slice(0, 4).map(bandCall).join(', ')});

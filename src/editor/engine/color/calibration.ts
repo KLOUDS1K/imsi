@@ -77,6 +77,12 @@ export function calibrationMatrix(c: CalibrationParams): Mat3 {
   return [m[0] * w[0], m[1] * w[1], m[2] * w[2], m[3] * w[0], m[4] * w[1], m[5] * w[2], m[6] * w[0], m[7] * w[1], m[8] * w[2]];
 }
 
+/** 0..1: the largest primary slider magnitude (drives the soft gamut knee). */
+export function calibrationStrength(c: CalibrationParams): number {
+  const v = [c.redHue, c.redSaturation, c.greenHue, c.greenSaturation, c.blueHue, c.blueSaturation];
+  return Math.min(1, Math.max(...v.map((x) => Math.abs(x))) / 100);
+}
+
 /** Stops of green removed (positive = magenta) in the deepest shadows. */
 export function shadowTintStops(c: CalibrationParams): number {
   return (c.shadowsTint / 100) * CAL_SHADOW_TINT_EV;

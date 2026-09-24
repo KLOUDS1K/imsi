@@ -1,0 +1,195 @@
+/* FolderTile (site folder) + EmptyState. */
+
+.k-folder {
+  --k-folder-w: 180px;
+  --k-folder-glyph: color-mix(in srgb, var(--k-folder-front-b), var(--k-on-accent) 42%);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
+  width: var(--k-folder-w);
+  max-width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--k-radius);
+  background: none;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.k-folder--md {
+  --k-folder-w: 136px;
+}
+
+.k-folder--sm {
+  --k-folder-w: 96px;
+  gap: 6px;
+}
+
+.k-folder__art {
+  display: block;
+  width: 100%;
+  border-radius: 9px;
+  transition:
+    transform calc(var(--k-dur) * 1.4) var(--k-ease),
+    box-shadow var(--k-dur) var(--k-ease);
+}
+
+.k-folder__svg,
+.k-empty__folder > svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.k-folder__back {
+  fill: var(--k-folder-top);
+}
+
+.k-folder__stop-a {
+  stop-color: var(--k-folder-front-a);
+}
+
+.k-folder__stop-b {
+  stop-color: var(--k-folder-front-b);
+}
+
+.k-folder__glyph-fill {
+  fill: var(--k-folder-glyph, color-mix(in srgb, var(--k-folder-front-b), var(--k-on-accent) 42%));
+}
+
+.k-folder__glyph-stroke {
+  stroke: var(--k-folder-glyph, color-mix(in srgb, var(--k-folder-front-b), var(--k-on-accent) 42%));
+}
+
+.k-folder__glyph-icon {
+  color: var(--k-folder-glyph, color-mix(in srgb, var(--k-folder-front-b), var(--k-on-accent) 42%));
+}
+
+.k-folder__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.k-folder__name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: var(--k-fs);
+  font-weight: var(--k-fw-semibold);
+  line-height: 1.3;
+  color: var(--k-text);
+}
+
+.k-folder__name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.k-folder__name-icon {
+  flex: none;
+  color: var(--k-accent-ink);
+}
+
+.k-folder__sub {
+  font-size: var(--k-fs-xs);
+  color: var(--k-text-muted);
+}
+
+.k-folder--sm .k-folder__name {
+  font-size: var(--k-fs-sm);
+}
+
+.k-folder:hover .k-folder__art {
+  transform: translateY(-2px);
+}
+
+.k-folder:active .k-folder__art {
+  transform: scale(0.985);
+}
+
+.k-folder:focus-visible {
+  box-shadow: none;
+}
+
+.k-folder:focus-visible .k-folder__art,
+.k-folder.is-selected .k-folder__art {
+  box-shadow: var(--k-focus-ring);
+}
+
+/* ---- EmptyState ---- */
+
+.k-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.k-empty__folder {
+  --k-folder-glyph: color-mix(in srgb, var(--k-folder-front-b), var(--k-on-accent) 42%);
+  display: block;
+  width: 132px;
+  margin-bottom: 14px;
+}
+
+.k-empty--compact {
+  padding: 24px 16px;
+}
+
+.k-empty--compact .k-empty__folder {
+  width: 84px;
+  margin-bottom: 8px;
+}
+
+.k-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  background: var(--k-surface-2);
+  color: var(--k-text-muted);
+}
+
+.k-empty__title {
+  margin: 0;
+  font-size: var(--k-fs-lg);
+  font-weight: var(--k-fw-semibold);
+  letter-spacing: -0.01em;
+  color: var(--k-text);
+}
+
+.k-empty--compact .k-empty__title {
+  font-size: var(--k-fs-md);
+}
+
+.k-empty__desc {
+  margin: 0;
+  font-size: var(--k-fs);
+  line-height: 1.5;
+  color: var(--k-text-2);
+}
+
+.k-empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}

@@ -66,25 +66,46 @@ float minc(vec3 c) { return min(c.r, min(c.g, c.b)); }
 // sRGB-encoded value of the TRUE (linear Rec.709) luminance of encoded colour e.
 float encLuma(vec3 e) { return linearToSrgb1(luma(srgbToLinear(max(e, vec3(0.0))))); }
 
-float chromaHeadroom(float d, float ye) {
-  if (d > 1e-6) return max(1.0 - ye, 0.0) / d;
-  if (d < -1e-6) return max(ye, 0.0) / -d;
-  return 1e6;
+// Sharp soft-min of x ≥ 0 against r ≥ 0: ≈ x for x ≪ r, → r for x ≫ r.
+float softMin4(float x, float r) {
+  float x2 = x * x;
+  float r2 = r * r;
+  return x * r * inversesqrt(sqrt(x2 * x2 + r2 * r2) + 1e-12);
 }
 
 // Scale the chroma of encoded colour e about its luminance-matched grey ye.
-// f = 0 gives the exact luminance-preserving grey (proper B&W). f > 1 is
-// soft-limited against the gamut headroom (x·r / sqrt(r² + x²)), so strong
-// boosts roll off smoothly instead of clipping a channel (no hue skew).
+// f ≤ 1 desaturates (f = 0 → the exact luminance-preserving grey, proper
+// B&W). For f > 1 the boost is soft-limited so no channel can reach 0
+// (dark saturated colours roll off instead of clipping), and when the
+// brightest channel would grow past 1 its growth is folded smoothly into the
+// remaining headroom by dimming the colour (hue and the boosted saturation
+// kept), which is how a bright colour can still get more saturated.
 vec3 scaleChroma(vec3 e, float ye, float fac) {
   vec3 d = e - vec3(ye);
-  if (fac > 1.0) {
-    float lim = min(chromaHeadroom(d.r, ye), min(chromaHeadroom(d.g, ye), chromaHeadroom(d.b, ye)));
-    float room = max(lim - 1.0, 0.0);
-    float x = fac - 1.0;
-    fac = 1.0 + x * room * inversesqrt(room * room + x * x + 1e-12);
+  if (fac <= 1.0) return vec3(ye) + d * max(fac, 0.0);
+  float lim = 1e6;
+  if (d.r < -1e-6) lim = min(lim, max(ye, 0.0) / -d.r);
+  if (d.g < -1e-6) lim = min(lim, max(ye, 0.0) / -d.g);
+  if (d.b < -1e-6) lim = min(lim, max(ye, 0.0) / -d.b);
+  fac = 1.0 + softMin4(fac - 1.0, max(lim - 1.0, 0.0));
+  vec3 o = vec3(ye) + d * fac;
+  float m0 = maxc(e);
+  float m1 = maxc(o);
+  if (m1 > m0 && m1 > 1e-6) {
+    float head = max(1.0 - m0, 0.0);
+    float m2 = m0 + softMin4(m1 - m0, head);
+    o *= m2 / m1;
   }
-  return vec3(ye) + d * max(fac, 0.0);
+  return o;
+}
+
+// Remove negative LINEAR channels by desaturating towards the luminance
+// (hue kept) instead of clipping each channel to 0.
+vec3 fitFloorLinear(vec3 c) {
+  float mn = minc(c);
+  if (mn >= 0.0) return c;
+  float y = luma(c);
+  return y > 0.0 ? mix(c, vec3(y), -mn / (y - mn)) : vec3(0.0);
 }
 
 // Bring encoded colour e into [0,1] without changing its hue. Negative

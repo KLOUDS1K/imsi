@@ -19,7 +19,7 @@ import type { ChangeInfo, EditorStoreApi, SetOptions } from '@/editor/contracts'
 import type { EditParams, HistoryEntry, SerializedEditState, Snapshot } from '@/editor/types';
 import { changeLabel } from './labels';
 import { cloneParams, normalizeParams, normCurvePoints, toNum } from './normalize';
-import { collectDiff, deepEqual, deepFreeze, getPath, reconcile, setIn } from './paths';
+import { collectDiff, deepFreeze, getPath, reconcile, setIn } from './paths';
 import { clampToSpec, CURVE_PATHS, specForPath } from './specs';
 
 /** Changes with the same coalesce key closer than this merge into one entry. */
@@ -136,13 +136,16 @@ export class EditorStore implements EditorStoreApi {
       console.warn(`EditorStore.set: type mismatch for "${path}"`, value);
       return;
     }
-    if (deepEqual(current, clean)) return;
-    const next = setIn(this._params, path, clean);
+    // Reuse unchanged parts of the current value (e.g. existing strokes when one
+    // is appended) so history snapshots keep sharing them; identity = no-op.
+    const shared = current === undefined ? clean : reconcile(current, clean);
+    if (shared === current) return;
+    const next = setIn(this._params, path, shared);
     if (next === undefined) {
       console.warn(`EditorStore.set: path "${path}" does not exist`);
       return;
     }
-    const label = opts.label ?? this.autoLabel(path, clean);
+    const label = opts.label ?? this.autoLabel(path, shared);
     this.commit(freeze(next), {
       label,
       paths: [path],

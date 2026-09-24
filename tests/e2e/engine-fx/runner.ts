@@ -64,7 +64,7 @@ export class MiniRunner {
     this.fbo = gl.createFramebuffer()!;
   }
 
-  createTexture(width: number, height: number, data: Float32Array | null = null, internal = this.gl.RGBA32F): Tex {
+  createTexture(width: number, height: number, data: Float32Array | null = null, internal: number = this.gl.RGBA32F): Tex {
     const gl = this.gl;
     const tex = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, tex);

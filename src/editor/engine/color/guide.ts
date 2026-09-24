@@ -44,3 +44,41 @@ export const GUIDE_DISPLAY_PASS: PassDef = {
   uniforms: () => ({}),
   output: 'rgba16f',
 };
+
+/**
+ * Source of the defringe neighbourhood blur: the linear image clamped to
+ * 0..1, so a specular highlight next to a fringe cannot dominate the
+ * neighbourhood colour. (Also gives the request a unique blur-sharing key.)
+ */
+export const FRINGE_SOURCE_PASS: PassDef = {
+  name: 'color.fringe.source',
+  fragment: /* glsl */ `${GLSL_HEADER}
+uniform sampler2D uInput;
+void main() {
+  vec4 c = texture(uInput, vUv);
+  outColor = vec4(clamp(c.rgb, 0.0, 1.0), c.a);
+}
+`,
+  inputs: ['uInput'],
+  uniforms: () => ({}),
+  output: 'rgba16f',
+};
+
+/**
+ * Source of the LOCAL detail blur (sharpness / noise): the display-referred
+ * input decoded to linear light, so smoothing averages light, not code values.
+ */
+export const DETAIL_SOURCE_PASS: PassDef = {
+  name: 'color.detail.source',
+  fragment: /* glsl */ `${GLSL_HEADER}
+${GLSL_COLOR_LIB}
+uniform sampler2D uInput;
+void main() {
+  vec4 e = texture(uInput, vUv);
+  outColor = vec4(srgbToLinear(max(e.rgb, vec3(0.0))), e.a);
+}
+`,
+  inputs: ['uInput'],
+  uniforms: () => ({}),
+  output: 'rgba16f',
+};

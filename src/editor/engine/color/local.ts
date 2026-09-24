@@ -24,7 +24,7 @@ import {
   glslFloat as f,
 } from './constants';
 import { GLSL_COLOR_OPS, GLSL_HEADER, GLSL_TONE_STAGE } from './glsl-common';
-import { GUIDE_DISPLAY_PASS } from './guide';
+import { DETAIL_SOURCE_PASS, GUIDE_DISPLAY_PASS } from './guide';
 import { GLSL_TONE } from './tone';
 
 const FRAGMENT = /* glsl */ `${GLSL_HEADER}
@@ -38,7 +38,7 @@ uniform sampler2D uMask;
 uniform sampler2D uLocalGuideS;
 uniform sampler2D uLocalGuideM;
 uniform sampler2D uLocalGuideL;
-uniform sampler2D uDetailBlur;
+uniform sampler2D uDetailBlur;   // linear light, blurred
 
 uniform bool uLocalOn;
 uniform float uAmount;       // mask.amount / 100
@@ -59,7 +59,7 @@ void main() {
   float sharp = uLocDetail.x * m;
   float noise = uLocDetail.y * m;
   if (sharp != 0.0 || noise != 0.0) {
-    vec3 blurC = srgbToLinear(max(texture(uDetailBlur, vUv).rgb, vec3(0.0)));
+    vec3 blurC = max(texture(uDetailBlur, vUv).rgb, vec3(0.0)); // linear (DETAIL_SOURCE_PASS)
     float flatW = 1.0 - smoothstep(${f(LOCAL_NOISE_FLAT_LO)}, ${f(LOCAL_NOISE_FLAT_HI)}, localStd(texture(uLocalGuideS, vUv).xy));
     if (noise > 0.0) c = mix(c, blurC, noise * ${f(LOCAL_NOISE_SMOOTH)} * flatW);
     // Negative noise re-emphasises fine grain in flat areas (mirror of smoothing).
@@ -93,7 +93,7 @@ void main() {
     c = relight(c, y, globalToneLinear(y, g.x, g.y, g.z));
   }
 
-  vec3 e = linearToSrgb(c);
+  vec3 e = linearToSrgb(fitFloorLinear(c));
   float sat = uLocPresence.w * m;
   if (sat != 0.0) e = scaleChroma(e, encLuma(e), 1.0 + sat);
 
@@ -143,7 +143,7 @@ export const LOCAL_BLURS: BlurRequest[] = [
   { uniform: 'uLocalGuideS', source: 'uInput', prepass: GUIDE_DISPLAY_PASS, sigma: sigmaIf((n) => n.small, BLUR_SIGMAS.small) },
   { uniform: 'uLocalGuideM', source: 'uInput', prepass: GUIDE_DISPLAY_PASS, sigma: sigmaIf((n) => n.medium, BLUR_SIGMAS.medium) },
   { uniform: 'uLocalGuideL', source: 'uInput', prepass: GUIDE_DISPLAY_PASS, sigma: sigmaIf((n) => n.large, BLUR_SIGMAS.large) },
-  { uniform: 'uDetailBlur', source: 'uInput', sigma: sigmaIf((n) => n.detail, BLUR_SIGMAS.detail) },
+  { uniform: 'uDetailBlur', source: 'uInput', prepass: DETAIL_SOURCE_PASS, sigma: sigmaIf((n) => n.detail, BLUR_SIGMAS.detail) },
 ];
 
 export function localUniforms(extra?: PassExtra): UniformMap {

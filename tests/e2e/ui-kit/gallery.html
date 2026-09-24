@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>KLOUD UI Kit</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
+    <script>
+      // ?theme=light|dark forces a theme (screenshots); otherwise the saved choice.
+      try {
+        var q = new URLSearchParams(location.search).get('theme');
+        var t = q || localStorage.getItem('kloud-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    </script>
+    <style>
+      /* Gallery chrome only — styled exclusively with --k-* tokens. */
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        overflow: hidden;
+      }
+      #app {
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+      }
+      .g-body {
+        display: flex;
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      .g-sidebar {
+        display: flex;
+        flex-direction: column;
+        flex: none;
+        width: var(--k-sidebar-w);
+        background: var(--k-sidebar);
+        border-right: 1px solid var(--k-border);
+      }
+      .g-sidebar__top {
+        padding: 18px 12px 10px 16px;
+      }
+      .g-sidebar__nav {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        padding: 6px 8px;
+        flex: 1 1 auto;
+        overflow: auto;
+      }
+      .g-sidebar__foot {
+        margin: 0 8px;
+        padding: 10px 8px 12px;
+        border-top: 1px solid var(--k-border);
+        font-size: var(--k-fs-xs);
+        color: var(--k-text-muted);
+      }
+      .g-main {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: auto;
+        padding: 28px 24px 64px;
+      }
+      .g-head {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--k-border);
+        margin-bottom: 24px;
+      }
+      .g-block {
+        margin-bottom: 36px;
+      }
+      .g-block > .k-label-row {
+        margin-bottom: 16px;
+      }
+      .g-folders {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 180px));
+        gap: 24px 16px;
+        align-items: end;
+      }
+      .g-develop {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px 12px;
+        align-items: stretch;
+      }
+      .g-develop > .g-panel,
+      .g-develop > .g-card {
+        align-self: flex-start;
+      }
+      .g-panel {
+        width: var(--k-panel-w);
+        max-width: 100%;
+        border: 1px solid var(--k-border);
+        border-radius: var(--k-radius);
+        background: var(--k-sidebar);
+        overflow: hidden;
+      }
+      .g-panel__title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 36px;
+        padding: 0 10px 0 14px;
+        border-bottom: 1px solid var(--k-border);
+      }
+      .g-wheels {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px 12px;
+        padding-top: 4px;
+      }
+      .g-wheels .k-grade:first-child {
+        grid-column: 1 / -1;
+      }
+      .g-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+      }
+      .g-card {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 14px 16px 16px;
+        border: 1px solid var(--k-border);
+        border-radius: var(--k-radius);
+        background: var(--k-sidebar);
+        min-width: 0;
+      }
+      .g-card > .k-label {
+        margin-bottom: 2px;
+      }
+      .g-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .g-icons {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+        gap: 4px;
+      }
+      .g-icon {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 12px 4px 8px;
+        border-radius: var(--k-radius-sm);
+        color: var(--k-text-2);
+      }
+      .g-icon:hover {
+        background: var(--k-surface-3);
+        color: var(--k-text);
+      }
+      .g-icon span {
+        font-size: var(--k-fs-2xs);
+        color: var(--k-text-muted);
+        text-align: center;
+        overflow-wrap: anywhere;
+      }
+      .g-ctx {
+        display: grid;
+        place-items: center;
+        height: 72px;
+        border: 1px dashed var(--k-border-strong);
+        border-radius: var(--k-radius);
+        color: var(--k-text-muted);
+        font-size: var(--k-fs-sm);
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .g-log {
+        min-height: 18px;
+        font-size: var(--k-fs-xs);
+        color: var(--k-text-muted);
+      }
+      .g-menu-btn {
+        display: none;
+      }
+      @media (max-width: 760px) {
+        .g-sidebar {
+          display: none;
+        }
+        .g-menu-btn {
+          display: inline-grid;
+        }
+        .g-main {
+          padding: 20px 16px 64px;
+        }
+        .g-hide-sm {
+          display: none !important;
+        }
+        .g-folders {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .g-folders .k-folder {
+          width: 100%;
+        }
+        .g-develop .k-splitter {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./gallery.ts"></script>
+  </body>
+</html>

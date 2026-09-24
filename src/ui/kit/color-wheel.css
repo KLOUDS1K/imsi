@@ -1,0 +1,92 @@
+/* ColorWheel + GradeWheelControl. */
+
+.k-wheel {
+  position: relative;
+  flex: none;
+  border-radius: 50%;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.k-wheel:focus-visible {
+  box-shadow: var(--k-focus-ring);
+}
+
+.k-wheel__canvas {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.k-wheel__spoke {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 1px;
+  margin-top: -0.5px;
+  transform-origin: 0 50%;
+  background: var(--k-text);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.k-wheel__handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--k-surface);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px var(--k-text-muted),
+    var(--k-shadow-sm);
+  cursor: grab;
+  transition:
+    width var(--k-dur) var(--k-ease),
+    height var(--k-dur) var(--k-ease);
+}
+
+.k-wheel.is-dragging .k-wheel__handle {
+  width: 17px;
+  height: 17px;
+  cursor: grabbing;
+}
+
+.k-wheel.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.k-grade {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.k-grade__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 8px;
+}
+
+.k-grade__readout {
+  font-size: var(--k-fs-xs);
+  color: var(--k-text-faint);
+  white-space: pre;
+}
+
+.k-grade.is-modified .k-grade__readout {
+  color: var(--k-text-2);
+}
+
+.k-grade__wheel {
+  display: flex;
+  justify-content: center;
+  padding: 6px 0 4px;
+}

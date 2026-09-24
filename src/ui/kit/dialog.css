@@ -1,0 +1,138 @@
+/* Dialog / Modal. */
+
+.k-dialog-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  overflow: auto;
+  transition: opacity calc(var(--k-dur) * 1.2) var(--k-ease);
+  opacity: 0;
+}
+
+.k-dialog-layer.is-open {
+  opacity: 1;
+}
+
+.k-dialog-layer.is-closing {
+  pointer-events: none;
+}
+
+.k-dialog-scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--k-overlay);
+}
+
+.k-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(480px, 100%);
+  max-height: calc(100dvh - 48px);
+  border-radius: var(--k-radius-lg);
+  background: var(--k-surface);
+  color: var(--k-text);
+  box-shadow:
+    var(--k-shadow-pop),
+    0 0 0 1px var(--k-border);
+  transform: translateY(6px) scale(0.985);
+  transition: transform calc(var(--k-dur) * 1.4) var(--k-ease);
+}
+
+.k-dialog-layer.is-open .k-dialog {
+  transform: none;
+}
+
+.k-dialog:focus-visible {
+  box-shadow:
+    var(--k-shadow-pop),
+    0 0 0 1px var(--k-border-strong);
+}
+
+.k-dialog--sm {
+  width: min(380px, 100%);
+}
+
+.k-dialog--lg {
+  width: min(720px, 100%);
+}
+
+.k-dialog--xl {
+  width: min(960px, 100%);
+}
+
+.k-dialog__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 18px 0 20px;
+}
+
+.k-dialog__title {
+  margin: 0;
+  padding-top: 2px;
+  font-size: var(--k-fs-lg);
+  font-weight: var(--k-fw-semibold);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.k-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 8px 20px 20px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.k-dialog__desc,
+.k-dialog__text {
+  margin: 0;
+  font-size: var(--k-fs);
+  line-height: 1.55;
+  color: var(--k-text-2);
+}
+
+.k-dialog__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--k-border);
+  background: color-mix(in srgb, var(--k-surface) 60%, var(--k-surface-2));
+  border-radius: 0 0 var(--k-radius-lg) var(--k-radius-lg);
+}
+
+/* Phones: dock to the bottom like a sheet. */
+@media (max-width: 520px) {
+  .k-dialog-layer {
+    place-items: end stretch;
+    padding: 0;
+  }
+
+  .k-dialog,
+  .k-dialog--sm,
+  .k-dialog--lg,
+  .k-dialog--xl {
+    width: 100%;
+    max-height: calc(100dvh - 32px);
+    border-radius: var(--k-radius-lg) var(--k-radius-lg) 0 0;
+    transform: translateY(24px);
+  }
+
+  .k-dialog__foot {
+    border-radius: 0;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .k-dialog__foot .k-btn {
+    flex: 1 1 0;
+    height: 40px;
+  }
+}

@@ -1,0 +1,271 @@
+/* Toolbar, nav arrows, breadcrumb, sidebar items, status bar, splitter. */
+
+.k-toolbar {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: var(--k-toolbar-h);
+  padding: 0 10px;
+  border-bottom: 1px solid var(--k-border);
+  background: var(--k-toolbar);
+  color: var(--k-text);
+}
+
+.k-toolbar__group {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.k-toolbar__spacer {
+  flex: 1 1 auto;
+  min-width: 4px;
+}
+
+.k-toolbar__divider {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--k-border);
+}
+
+/* Site chevrons are thin and faint. */
+.k-nav-arrows .k-iconbtn {
+  color: var(--k-text-faint);
+}
+
+.k-nav-arrows .k-iconbtn:hover {
+  color: var(--k-text);
+}
+
+.k-nav-arrows .k-iconbtn:disabled {
+  opacity: 0.5;
+}
+
+/* ---- breadcrumb ---- */
+
+.k-breadcrumb-nav {
+  flex: 0 1 auto;
+  min-width: 40px;
+}
+
+/* Phones: only the current location (like the site). */
+@media (max-width: 560px) {
+  .k-breadcrumb__li:not(:last-child) {
+    display: none;
+  }
+
+  .k-breadcrumb__li:last-child > .k-breadcrumb__sep {
+    display: none;
+  }
+
+  .k-toolbar {
+    gap: 4px;
+    padding: 0 6px;
+  }
+}
+
+.k-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.k-breadcrumb__li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.k-breadcrumb__sep {
+  flex: none;
+  color: var(--k-text-faint);
+}
+
+.k-breadcrumb__item {
+  overflow: hidden;
+  padding: 3px 5px;
+  border: 0;
+  border-radius: var(--k-radius-xs);
+  background: transparent;
+  color: var(--k-text);
+  font-size: var(--k-fs);
+  font-weight: var(--k-fw-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.k-breadcrumb__item {
+  color: var(--k-text-muted);
+  font-weight: var(--k-fw-medium);
+}
+
+button.k-breadcrumb__item:hover {
+  background: var(--k-surface-3);
+  color: var(--k-text);
+}
+
+/* ---- wordmark name (the rest lives in base.css) ---- */
+
+.k-wordmark__name {
+  font: inherit;
+}
+
+a.k-wordmark:focus-visible {
+  border-radius: var(--k-radius-xs);
+}
+
+/* ---- sidebar nav item ---- */
+
+.k-navitem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--k-radius-sm);
+  background: transparent;
+  color: var(--k-text-2);
+  font-size: var(--k-fs);
+  text-align: left;
+  touch-action: manipulation;
+  transition:
+    background-color var(--k-dur) var(--k-ease),
+    color var(--k-dur) var(--k-ease);
+}
+
+.k-navitem:hover {
+  background: var(--k-surface-3);
+  color: var(--k-text);
+}
+
+.k-navitem[aria-current='page'] {
+  background: var(--k-surface-3);
+  color: var(--k-text);
+  font-weight: var(--k-fw-medium);
+}
+
+.k-navitem__icon {
+  flex: none;
+  color: var(--k-text-muted);
+}
+
+.k-navitem__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.k-navitem__count {
+  flex: none;
+  font-size: var(--k-fs-xs);
+  color: var(--k-text-faint);
+}
+
+@media (pointer: coarse) {
+  .k-navitem {
+    height: 38px;
+  }
+}
+
+/* ---- status bar ---- */
+
+.k-statusbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  height: var(--k-statusbar-h);
+  padding: 0 14px;
+  border-top: 1px solid var(--k-border);
+  background: var(--k-toolbar);
+  color: var(--k-text-muted);
+  font-size: var(--k-fs-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* ---- splitter ---- */
+
+.k-splitter {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  width: 1px;
+  align-self: stretch;
+  background: var(--k-border);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.k-splitter--y {
+  width: auto;
+  height: 1px;
+  cursor: row-resize;
+}
+
+/* Wide invisible hit area. */
+.k-splitter::before {
+  content: '';
+  position: absolute;
+  inset: 0 -4px;
+}
+
+.k-splitter--y::before {
+  inset: -4px 0;
+}
+
+/* Accent line on hover / drag / focus. */
+.k-splitter::after {
+  content: '';
+  position: absolute;
+  inset: 0 -1px;
+  background: var(--k-accent);
+  opacity: 0;
+  transition: opacity var(--k-dur) var(--k-ease);
+}
+
+.k-splitter--y::after {
+  inset: -1px 0;
+}
+
+.k-splitter:hover::after,
+.k-splitter.is-dragging::after,
+.k-splitter:focus-visible::after {
+  opacity: 1;
+  transition-delay: 80ms;
+}
+
+.k-splitter:focus-visible {
+  box-shadow: none;
+}
+
+html.k-resizing-x,
+html.k-resizing-x * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+html.k-resizing-y,
+html.k-resizing-y * {
+  cursor: row-resize !important;
+  user-select: none !important;
+}

@@ -367,8 +367,9 @@ export function undistortRadius(rs: number, k1: number, k2: number, k3: number):
     if (!(next > 0) || !Number.isFinite(next)) break;
     if (Math.abs(next - r) <= 1e-15 * (1 + r)) return next;
     r = next;
-    if (i === 39 && Math.abs(f) < 1e-12) return r;
   }
+  // Newton may stall at float precision without meeting the step criterion.
+  if (radialSlope(r, k1, k2, k3) > 0 && Math.abs(radial(r, k1, k2, k3) - rs) <= 1e-13 * (1 + rs)) return r;
   // Bisection on [0, hi] where hi stays on the monotone branch.
   let hi = 0;
   let step = Math.max(rs, 1e-3);
@@ -481,7 +482,9 @@ export function buildGeometryUniforms(params: EditParams, ctx: GeometryUniformCo
   const tile = mat3(fin(r.w, 1), 0, fin(r.x, 0), 0, fin(r.h, 1), fin(r.y, 0), 0, 0, 1);
   const m = mul3(plan.outToLens, tile);
   // Normalize so the homogeneous row has a sane magnitude (helps float32).
-  const n = Math.abs(m[8]) > 1e-12 ? m[8] : 1;
+  // Divide by |m8|, never m8: the sign of w marks the valid side of a
+  // keystone horizon and must be preserved.
+  const n = Math.abs(m[8]) > 1e-12 ? Math.abs(m[8]) : 1;
   const useCA = Math.abs(lens.caRed - 1) > 1e-7 || Math.abs(lens.caBlue - 1) > 1e-7;
   return {
     uGeoRow0: [m[0] / n, m[1] / n, m[2] / n],

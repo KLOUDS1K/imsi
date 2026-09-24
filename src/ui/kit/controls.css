@@ -98,7 +98,7 @@
   width: calc(var(--k-switch-h) - 4px);
   height: calc(var(--k-switch-h) - 4px);
   border-radius: 50%;
-  background: var(--k-surface);
+  background: var(--k-knob);
   box-shadow: var(--k-shadow-sm);
   transition: transform var(--k-dur) var(--k-ease);
 }
@@ -389,10 +389,11 @@
 .k-search {
   position: relative;
   display: inline-flex;
+  flex: 0 1 auto;
   align-items: center;
   width: 200px;
   max-width: 100%;
-  min-width: 0;
+  min-width: 108px;
   height: 28px;
   border-radius: var(--k-radius);
   background: var(--k-surface-2);

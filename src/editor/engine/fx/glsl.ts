@@ -28,10 +28,12 @@ vec4 fetchClamped(sampler2D t, ivec2 p) {
   return texelFetch(t, clamp(p, ivec2(0), s - 1), 0);
 }
 
+// Samplers come in two flavours: *Px take a position in texel-index space
+// (p = uv * size - 0.5, so integer p = a texel centre exactly); the uv
+// versions convert. Integer positions give exact copies in both.
+
 // Bilinear from texel fetches (independent of the sampler's filter mode).
-vec4 sampleBilinear(sampler2D t, vec2 uv) {
-  vec2 size = vec2(textureSize(t, 0));
-  vec2 p = uv * size - 0.5;
+vec4 sampleBilinearPx(sampler2D t, vec2 p) {
   vec2 f = fract(p);
   ivec2 i = ivec2(floor(p));
   vec4 a = fetchClamped(t, i);
@@ -40,14 +42,15 @@ vec4 sampleBilinear(sampler2D t, vec2 uv) {
   vec4 d = fetchClamped(t, i + ivec2(1, 1));
   return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
+vec4 sampleBilinear(sampler2D t, vec2 uv) {
+  return sampleBilinearPx(t, uv * vec2(textureSize(t, 0)) - 0.5);
+}
 
 // Catmull-Rom (a = -0.5) bicubic from 16 fetches. Exact at texel centres
 // (weights 0,1,0,0), so identity warps copy pixels bit-for-bit. The result is
 // clamped to the min/max of the 4 nearest texels to suppress ringing halos at
 // hard edges.
-vec4 sampleCatmullRom(sampler2D t, vec2 uv) {
-  vec2 size = vec2(textureSize(t, 0));
-  vec2 p = uv * size - 0.5;
+vec4 sampleCatmullRomPx(sampler2D t, vec2 p) {
   vec2 f = fract(p);
   ivec2 i = ivec2(floor(p));
   vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
@@ -69,6 +72,9 @@ vec4 sampleCatmullRom(sampler2D t, vec2 uv) {
     acc += row * wy;
   }
   return clamp(acc, lo, hi);
+}
+vec4 sampleCatmullRom(sampler2D t, vec2 uv) {
+  return sampleCatmullRomPx(t, uv * vec2(textureSize(t, 0)) - 0.5);
 }
 `;
 

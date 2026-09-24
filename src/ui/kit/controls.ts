@@ -527,7 +527,7 @@ export function createSearchInput(opts: SearchInputOptions = {}): SearchInput {
   const el = h('div', { class: 'k-search', style: opts.width ? { width: opts.width } : undefined }, icon('search', 13, { class: 'k-search__icon', strokeWidth: 1.4 }), input, clearBtn);
   const wait = opts.debounce ?? 120;
   let timer = 0;
-  const sync = (): void => el.classList.toggle('has-value', input.value.length > 0);
+  const sync = (): void => void el.classList.toggle('has-value', input.value.length > 0);
   const emit = (): void => {
     window.clearTimeout(timer);
     if (!wait) opts.onInput?.(input.value);

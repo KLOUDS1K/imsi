@@ -81,7 +81,7 @@ export interface SliderOptions {
   wheel?: boolean;
   /** Accessible name if different from `label`. */
   ariaLabel?: string;
-  /** Tooltip on the label. Default "Double-click to reset". */
+  /** Native tooltip on the label (e.g. a longer explanation). */
   title?: string;
   /** Stored in data-id (handy for tests and delegation). */
   id?: string;
@@ -146,7 +146,7 @@ export function createSlider(opts: SliderOptions): Slider {
   let disabled = !!opts.disabled;
 
   const labelId = kitId('k-slider-label');
-  const label = h('span', { class: 'k-slider__label', id: labelId, title: opts.title ?? 'Double-click to reset' }, opts.label);
+  const label = h('span', { class: 'k-slider__label', id: labelId, title: opts.title ?? null }, opts.label);
   const rail = h('div', { class: 'k-slider__rail' });
   const tick = h('div', { class: 'k-slider__tick', attrs: { 'aria-hidden': 'true' } });
   const fill = h('div', { class: 'k-slider__fill' });

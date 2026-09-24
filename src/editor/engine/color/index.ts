@@ -15,7 +15,9 @@
  *   not read returns BLUR_SIGMAS.collapsed (a tiny radius shared by all such
  *   requests), so neutral settings cost almost nothing.
  * - Guide prepasses output vec4(L, L², min, min²) with negative L — they need a
- *   float render target (RGBA16F).
+ *   float render target (RGBA16F). Every blur request has a uniquely named
+ *   prepass, so the (source, prepass, sigma) sharing key never collides with
+ *   other modules' blurs of the same sampler name.
  */
 export { BLUR_SIGMAS } from './constants';
 export { PRE_PASS, preUniforms, isPreIdentity } from './pre';
@@ -23,7 +25,7 @@ export { DEVELOP_PASS, DEVELOP_BLURS, developUniforms, developNeeds, isDefringeA
 export type { DevelopNeeds } from './develop';
 export { LOCAL_PASS, LOCAL_BLURS, localUniforms, localNeeds, isMaskIdentity } from './local';
 export type { LocalNeeds } from './local';
-export { GUIDE_LINEAR_PASS, GUIDE_DISPLAY_PASS } from './guide';
+export { GUIDE_LINEAR_PASS, GUIDE_DISPLAY_PASS, FRINGE_SOURCE_PASS, DETAIL_SOURCE_PASS } from './guide';
 export { CURVE_LUT_SIZE, curveLutKey, isCurveIdentity, buildDevelopCurveLut } from './lut';
 export { calibrationMatrix, isCalibrationIdentity } from './calibration';
 export { HSL_BANDS, hslWeights, hslBandWeight, hslHueShift, isHslIdentity } from './hsl';

@@ -1,0 +1,71 @@
+/* Swatch + ColorInput. */
+
+.k-swatch {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--k-radius-sm);
+  background: var(--k-surface);
+  box-shadow: inset 0 0 0 1px var(--k-border-strong);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.k-swatch--circle,
+.k-swatch--circle .k-swatch__chip {
+  border-radius: 50%;
+}
+
+.k-swatch__chip {
+  display: block;
+  border-radius: calc(var(--k-radius-sm) - 2px);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--k-text) 12%, transparent);
+}
+
+.k-swatch:hover {
+  box-shadow: inset 0 0 0 1px var(--k-text-faint);
+}
+
+.k-swatch[aria-pressed='true'] {
+  box-shadow:
+    inset 0 0 0 1px var(--k-border-strong),
+    0 0 0 2px var(--k-bg),
+    0 0 0 3.5px var(--k-text-2);
+}
+
+.k-swatch:focus-visible,
+.k-colorinput__swatch:focus-within {
+  box-shadow: var(--k-focus-ring);
+}
+
+.k-colorinput {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.k-colorinput__native {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.k-colorinput__hash {
+  margin-right: -4px;
+  color: var(--k-text-faint);
+  font-size: var(--k-fs-sm);
+}
+
+.k-colorinput__hex {
+  width: 76px;
+  text-transform: uppercase;
+}

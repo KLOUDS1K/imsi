@@ -70,7 +70,7 @@ export const HL_START = -1.0;
 export const HL_FULL = 1.6;
 /** Extra compression above white for recovery (negative highlights only). */
 export const HL_RECOVER_START = 2.5;
-export const HL_RECOVER_SLOPE = 0.7;
+export const HL_RECOVER_SLOPE = 0.8;
 /** Positive highlights taper off towards white so brightening rolls into clipping gently. */
 export const HL_POS_TAPER_LO = 1.0;
 export const HL_POS_TAPER_HI = 2.6;
@@ -154,10 +154,16 @@ export const HAZE_ADD = 0.6;
 export const HAZE_AIRLIGHT = 0.78;
 
 /* Colour. */
+/** Fraction of the gap to each neighbour over which an HSL band keeps full weight. */
+export const HSL_PLATEAU = 0.15;
 /** HSL hue ±100 → up to this many degrees towards the neighbouring band. */
 export const HSL_HUE_DEG = 30;
-/** HSL luminance ±100 → EV (scaled by pixel chroma). */
-export const HSL_LUM_EV = 1.25;
+/**
+ * HSL luminance ±100 (scaled by pixel chroma) on encoded luminance p:
+ * +100 moves p this fraction of the way to white (never clips), −100 scales p by (1 − HSL_LUM_DARKEN).
+ */
+export const HSL_LUM_LIFT = 0.5;
+export const HSL_LUM_DARKEN = 0.45;
 /** Encoded chroma (max−min) at which the HSL luminance slider reaches full effect. */
 export const HSL_LUM_CHROMA = 0.35;
 
@@ -179,9 +185,11 @@ export const GRADE_LUM_LIFT = 0.2;
 export const GRADE_LUM_DARKEN = 0.35;
 
 /* Calibration. */
-export const CAL_HUE_DEG = 25;
+export const CAL_HUE_DEG = 20;
 export const CAL_SAT = 0.5;
 export const CAL_SHADOW_TINT_EV = 0.35;
+/** Soft gamut floor (min/luma ratio) at full calibration strength. */
+export const CAL_GAMUT_KNEE = 0.12;
 
 /* Lens vignetting (manual slider). */
 export const LENS_VIG_EV = 1.2;

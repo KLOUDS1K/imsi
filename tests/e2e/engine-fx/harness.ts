@@ -3,10 +3,10 @@
  * that render with the real PassDefs through MiniRunner and return plain
  * numbers for fx.spec.ts to assert on.
  */
-import { createDefaultParams, createEmptyMeta } from '../../../src/editor/defaults';
+import { createDefaultParams } from '../../../src/editor/defaults';
 import type { LensCorrection } from '../../../src/editor/contracts';
-import type { EditParams, HealSpot, Point } from '../../../src/editor/types';
-import type { PassContext, PassDef } from '../../../src/editor/engine/pass-types';
+import type { EditParams, HealSpot } from '../../../src/editor/types';
+import type { PassDef } from '../../../src/editor/engine/pass-types';
 import { srgbToLinear } from '../../../src/editor/color/math';
 import {
   DETAIL_STAGE,
@@ -16,53 +16,9 @@ import {
   HEAL_PASS,
   PATCH_COMPOSITE_PASS,
 } from '../../../src/editor/engine/fx';
-import { createGeometryPlan, lensTermsFrom, mapSourceToOut } from '../../../src/editor/engine/fx/geometry-core';
-import { MiniRunner, type Tex } from './runner';
-import { blank, get, makeScene, maxAbsDiff, noisyFlat, randomImage, set, stats, toImageData, type Img } from './scenes';
-
-const ZERO_LENS: LensCorrection = { profile: null, k1: 0, k2: 0, k3: 0, v1: 0, v2: 0, v3: 0, caRed: 1, caBlue: 1 };
-
-type SourceToOutput = (x: number, y: number, p: EditParams, w: number, h: number, ignoreCrop?: boolean, lens?: LensCorrection) => Point;
-
-/** Prefer the public engine/geometry.ts; fall back to the core when @/editor/lens is not written yet. */
-let sourceToOutput: SourceToOutput = (x, y, p, w, h, ignoreCrop = false, lens = ZERO_LENS) => {
-  const out = { x: 0, y: 0 };
-  mapSourceToOut(createGeometryPlan(p, w, h, ignoreCrop, lensTermsFrom(p, lens)), x, y, out);
-  return out;
-};
-let geometrySource = 'fx/geometry-core';
-
-const runner = new MiniRunner();
-
-function ctxFor(w: number, h: number, o: Partial<PassContext> = {}): PassContext {
-  return {
-    width: w,
-    height: h,
-    srcWidth: w,
-    srcHeight: h,
-    fullWidth: w,
-    fullHeight: h,
-    scale: 1,
-    quality: 'full',
-    isRaw: false,
-    meta: createEmptyMeta('test'),
-    lens: ZERO_LENS,
-    ignoreCrop: false,
-    outRect: { x: 0, y: 0, w: 1, h: 1 },
-    outWidth: w,
-    outHeight: h,
-    ...o,
-  };
-}
-
-const params = (mut?: (p: EditParams) => void) => {
-  const p = createDefaultParams();
-  mut?.(p);
-  return p;
-};
-
-const upload = (img: Img): Tex => runner.createTexture(img.width, img.height, img.data);
-const download = (t: Tex): Img => ({ width: t.width, height: t.height, data: runner.read(t) });
+import { ZERO_LENS, ctxFor, download, geometry, params, runner, upload } from './common';
+import { renderDetail, renderDetailParts, renderScene } from './renders';
+import { blank, get, makeScene, maxAbsDiff, noisyFlat, randomImage, set, stats, type Img } from './scenes';
 
 /* ------------------------------------------------------------------ */
 
@@ -136,10 +92,10 @@ function orientationMarker() {
     const oh = p.crop.orientation % 180 === 0 ? H : W;
     const res = download(runner.run(GEOMETRY_PASS, { uInput: src }, p, ctxFor(ow, oh, { srcWidth: W, srcHeight: H, outWidth: ow, outHeight: oh })));
     const peak = findPeak(res, 0);
-    const pr = sourceToOutput((mx + 0.5) / W, (my + 0.5) / H, p, W, H);
+    const pr = geometry.sourceToOutput((mx + 0.5) / W, (my + 0.5) / H, p, W, H);
     out[name] = { found: [peak.x, peak.y], predicted: [Math.floor(pr.x * ow), Math.floor(pr.y * oh)], size: [ow, oh], value: peak.v };
   }
-  return { geometrySource, cases: out };
+  return { geometrySource: geometry.source, cases: out };
 }
 
 /** Blurred marker through a rotated/keystoned/lens-corrected crop: peak within a pixel of the prediction. */
@@ -162,7 +118,7 @@ function warpedMarker() {
   const oh = Math.round(H * 0.85);
   const res = download(runner.run(GEOMETRY_PASS, { uInput: src }, p, ctxFor(ow, oh, { srcWidth: W, srcHeight: H, outWidth: ow, outHeight: oh, lens })));
   const peak = findPeak(res, 0);
-  const pr = sourceToOutput((cx + 0.5) / W, (cy + 0.5) / H, p, W, H, false, lens);
+  const pr = geometry.sourceToOutput((cx + 0.5) / W, (cy + 0.5) / H, p, W, H, false, lens);
   return { found: [peak.x + 0.5, peak.y + 0.5], predicted: [pr.x * ow, pr.y * oh] };
 }
 
@@ -372,10 +328,10 @@ function detail() {
     p.noise.aiDenoiseStrength = 70;
     p.noise.detailPreservation = 20;
   });
-  // Sharpening a soft step edge.
+  // Sharpening a hard step edge (0.3 | 0.7 at x = 32).
   const edge = blank(64, 16);
   for (let y = 0; y < 16; y++) for (let x = 0; x < 64; x++) {
-    const v = 0.3 + 0.4 / (1 + Math.exp(-(x - 31.5) / 1.2));
+    const v = x < 32 ? 0.3 : 0.7;
     set(edge, x, y, [v, v, v]);
   }
   const edgeTex = upload(edge);
@@ -447,108 +403,32 @@ function glowEffects() {
   };
 }
 
-/** Full chain on the synthetic scene → PNG data URL (before | after). */
-function renderScene(): string {
+/** Mean colour of the (neutral) checker patch of the scene under each effect alone. */
+function neutralTint() {
   const W = 480;
   const H = 320;
-  const scene = makeScene(W, H);
-  const lens: LensCorrection = { ...ZERO_LENS, k1: -0.05, caRed: 1.002, caBlue: 0.998 };
-  const p = params((q) => {
-    q.retouch.spots = [{ id: 'a', kind: 'heal', x: 0.64, y: 0.5, sx: 0.64, sy: 0.33, radius: 0.03, feather: 50, opacity: 100 }];
-    q.detail.sharpenAmount = 60;
-    q.noise.luminance = 20;
-    q.noise.color = 25;
-    q.crop.angle = 3;
-    q.transform.vertical = 12;
-    Object.assign(q.crop, { x: 0.04, y: 0.04, w: 0.92, h: 0.92 });
-    q.lens.removeCA = true;
-    q.effects.vignetteAmount = -45;
-    q.effects.grainAmount = 30;
-    q.effects.bloom = 35;
-    q.effects.halation = 45;
-    q.effects.glow = 15;
-  });
-  const src = upload(scene);
-  const ctxSrc = ctxFor(W, H, { lens });
-  const healed = runner.run(HEAL_PASS, { uInput: src }, p, ctxSrc, { spots: p.retouch.spots });
-  const detailed = runner.runStage(DETAIL_STAGE, healed, p, ctxSrc);
-  const ow = Math.round(W * 0.92);
-  const oh = Math.round(H * 0.92);
-  const ctxOut = ctxFor(ow, oh, { srcWidth: W, srcHeight: H, outWidth: ow, outHeight: oh, lens });
-  const warped = runner.run(GEOMETRY_PASS, { uInput: detailed }, p, ctxOut);
-  const final = download(runner.runStage(EFFECTS_STAGE, warped, p, ctxOut));
-  const canvas = document.createElement('canvas');
-  canvas.width = W + ow + 8;
-  canvas.height = H;
-  const g = canvas.getContext('2d')!;
-  g.fillStyle = '#222';
-  g.fillRect(0, 0, canvas.width, canvas.height);
-  g.putImageData(toImageData(scene), 0, 0);
-  g.putImageData(toImageData(final), W + 8, 0);
-  return canvas.toDataURL('image/png');
-}
-
-/** Zoomed panels: noisy | NR+sharpen | AI denoise+sharpen | dusty sky | healed sky. */
-function renderDetail(): string {
-  const W = 480;
-  const H = 320;
-  const clean = makeScene(W, H);
-  const noisy = makeScene(W, H);
-  const gn = noisyFlat(W, H, 0, 0.05, 0.04, 99);
-  for (let i = 0; i < noisy.data.length; i++) if (i % 4 !== 3) noisy.data[i] += gn.data[i];
-  const src = upload(noisy);
-  const ctx = ctxFor(W, H);
-  const nr = download(runner.runStage(DETAIL_STAGE, src, params((p) => {
-    p.noise.luminance = 50;
-    p.noise.color = 50;
-    p.detail.sharpenAmount = 40;
-    p.detail.sharpenMasking = 30;
-  }), ctx));
-  const ai = download(runner.runStage(DETAIL_STAGE, src, params((p) => {
-    p.noise.aiDenoise = true;
-    p.noise.aiDenoiseStrength = 60;
-    p.detail.sharpenAmount = 40;
-  }), ctx));
-  // Dust on the sky gradient, healed from nearby sky.
-  const dusty = makeScene(W, H);
-  const dust: [number, number, number][] = [[0.4, 0.3, 5], [0.47, 0.12, 7], [0.33, 0.45, 4]];
-  for (const [u, v, r] of dust) {
-    for (let y = -r - 2; y <= r + 2; y++) for (let x = -r - 2; x <= r + 2; x++) {
-      const d = Math.hypot(x, y);
-      if (d > r) continue;
-      const px = Math.round(u * W) + x;
-      const py = Math.round(v * H) + y;
-      const c = get(dusty, px, py);
-      const k = 0.55 + 0.2 * (d / r);
-      set(dusty, px, py, [c[0] * k, c[1] * k, c[2] * k]);
-    }
-  }
-  const spotsP: HealSpot[] = dust.map(([u, v, r], i) => ({
-    id: `d${i}`, kind: 'heal', x: u, y: v, sx: u + 0.06, sy: v + 0.02, radius: (r + 3) / W, feather: 40, opacity: 100,
-  }));
-  const healed = download(runner.run(HEAL_PASS, { uInput: upload(dusty) }, params(), ctx, { spots: spotsP }));
-  const crop = (img: Img, x0: number, y0: number, w: number, h: number, zoom: number): ImageData => {
-    const out: Img = { width: w * zoom, height: h * zoom, data: new Float32Array(w * zoom * h * zoom * 4) };
-    for (let y = 0; y < h * zoom; y++) for (let x = 0; x < w * zoom; x++) {
-      const s = get(img, x0 + Math.floor(x / zoom), y0 + Math.floor(y / zoom));
-      out.data.set(s, (y * w * zoom + x) * 4);
-    }
-    return toImageData(out);
+  const src = upload(makeScene(W, H));
+  const inChecker = (i: number) => {
+    const x = i % W;
+    const y = Math.floor(i / W);
+    return x > 0.08 * W && x < 0.28 * W && y > 0.72 * H && y < 0.92 * H;
   };
-  const canvas = document.createElement('canvas');
-  canvas.width = 3 * 240 + 16;
-  canvas.height = 240 + 8 + 160;
-  const g = canvas.getContext('2d')!;
-  g.fillStyle = '#222';
-  g.fillRect(0, 0, canvas.width, canvas.height);
-  [noisy, nr, ai].forEach((img, i) => g.putImageData(crop(img, 250, 90, 120, 120, 2), i * 248, 0));
-  g.putImageData(crop(dusty, 140, 20, 120, 80, 2), 0, 248);
-  g.putImageData(crop(healed, 140, 20, 120, 80, 2), 248, 248);
-  g.putImageData(crop(clean, 140, 20, 120, 80, 2), 496, 248);
-  return canvas.toDataURL('image/png');
+  const mean = (img: Img) => [0, 1, 2].map((c) => stats(img.data, c, inChecker).mean);
+  const variants: Record<string, (p: EditParams) => void> = {
+    none: () => {},
+    bloom: (p) => (p.effects.bloom = 35),
+    glow: (p) => (p.effects.glow = 15),
+    halation: (p) => (p.effects.halation = 45),
+    vignette: (p) => (p.effects.vignetteAmount = -45),
+    grain: (p) => (p.effects.grainAmount = 30),
+  };
+  const out: Record<string, number[]> = {};
+  for (const [k, mut] of Object.entries(variants)) out[k] = mean(download(runner.runStage(EFFECTS_STAGE, src, params(mut), ctxFor(W, H))));
+  return out;
 }
 
-const api = { renderDetail, identityDefaults, geometryIdentity, orientationMarker, warpedMarker, cropSubRect, vignette, grain, spots, patch, detail, glowEffects, renderScene };
+const api = {
+  neutralTint, renderDetailParts, renderDetail, identityDefaults, geometryIdentity, orientationMarker, warpedMarker, cropSubRect, vignette, grain, spots, patch, detail, glowEffects, renderScene };
 declare global {
   interface Window {
     fx: typeof api;
@@ -560,8 +440,8 @@ window.fx = api;
 
 import('../../../src/editor/engine/geometry')
   .then((m) => {
-    sourceToOutput = m.sourceToOutput;
-    geometrySource = 'engine/geometry';
+    geometry.sourceToOutput = m.sourceToOutput;
+    geometry.source = 'engine/geometry';
   })
   .catch(() => undefined)
   .finally(() => {

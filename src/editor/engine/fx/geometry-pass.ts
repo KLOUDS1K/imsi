@@ -55,7 +55,7 @@ vec4 sampleImage(sampler2D t, vec2 uv, vec2 jx, vec2 jy, float footprint) {
   vec2 ts = vec2(textureSize(t, 0));
   vec2 tp = uv * ts - 0.5;
   vec2 tr = floor(tp + 0.5);
-  uv = (mix(tp, tr, step(abs(tp - tr), vec2(1e-3))) + 0.5) / ts;
+  tp = mix(tp, tr, step(abs(tp - tr), vec2(1e-3)));
   if (footprint > 1.25) {
     // Minification: box-filter the pixel footprint (jx/jy = source uv per output pixel).
     int n = int(clamp(ceil(footprint), 2.0, 4.0));
@@ -65,12 +65,12 @@ vec4 sampleImage(sampler2D t, vec2 uv, vec2 jx, vec2 jy, float footprint) {
       for (int x = 0; x < 4; x++) {
         if (x >= n) break;
         vec2 o = (vec2(float(x), float(y)) + 0.5) / float(n) - 0.5;
-        acc += sampleBilinear(t, uv + jx * o.x + jy * o.y);
+        acc += sampleBilinearPx(t, tp + (jx * o.x + jy * o.y) * ts);
       }
     }
     return acc / float(n * n);
   }
-  return uBicubic > 0.5 ? sampleCatmullRom(t, uv) : sampleBilinear(t, uv);
+  return uBicubic > 0.5 ? sampleCatmullRomPx(t, tp) : sampleBilinearPx(t, tp);
 }
 
 void main() {
@@ -91,7 +91,8 @@ void main() {
   // Signed distance to the source border in source pixels → output pixels.
   vec2 sp = src * size;
   float dpx = min(min(sp.x, size.x - sp.x), min(sp.y, size.y - sp.y));
-  float cover = clamp(dpx / max(footprint, 1e-4) + 0.5, 0.0, 1.0);
+  // (+1e-3: derivative noise must not leave the outermost pixels at 0.99999.)
+  float cover = clamp(dpx / max(footprint, 1e-4) + 0.5 + 1e-3, 0.0, 1.0);
   if (cover <= 0.0) { outColor = vec4(0.0); return; }
 
   if (uOverlayMode > 0.5) {

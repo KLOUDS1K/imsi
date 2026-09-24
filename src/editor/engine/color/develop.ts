@@ -30,6 +30,8 @@ import {
   FRINGE_EDGE_LO,
   FRINGE_FEATHER,
   HSL_LUM_CHROMA,
+  HSL_LUM_DARKEN,
+  HSL_LUM_LIFT,
   SKIN_FEATHER,
   SKIN_HUE_HI,
   SKIN_HUE_LO,
@@ -39,7 +41,7 @@ import {
 } from './constants';
 import { GLSL_COLOR_OPS, GLSL_HEADER, GLSL_TONE_STAGE } from './glsl-common';
 import { GLSL_GRADE, gradingUniforms, isGradingIdentity } from './grading';
-import { GUIDE_LINEAR_PASS } from './guide';
+import { FRINGE_SOURCE_PASS, GUIDE_LINEAR_PASS } from './guide';
 import { GLSL_HSL, hslUniforms, isHslIdentity } from './hsl';
 import { isCurveIdentity } from './lut';
 import { GLSL_TONE } from './tone';
@@ -73,7 +75,7 @@ uniform vec4 uHslHueA;        // degrees: red orange yellow green
 uniform vec4 uHslHueB;        //          aqua blue purple magenta
 uniform vec4 uHslSatA;        // −1..1
 uniform vec4 uHslSatB;
-uniform vec4 uHslLumA;        // EV
+uniform vec4 uHslLumA;        // −1..1
 uniform vec4 uHslLumB;
 uniform bool uGradeOn;
 uniform vec2 uVibSat;         // vibrance −1..1, saturation (incl. contrast coupling) −1..1
@@ -136,10 +138,16 @@ vec3 applyHsl(vec3 e) {
   if (dh != 0.0) e = hsv2rgb(vec3(fract(hsv.x + dh / 360.0), hsv.y, hsv.z));
   if (ds != 0.0) e = scaleChroma(e, encLuma(e), 1.0 + ds);
   if (dl != 0.0) {
-    // Scaled by chroma so greys (and near-greys) are untouched.
-    float ev = dl * smoothstep(0.0, ${f(HSL_LUM_CHROMA)}, maxc(e) - minc(e));
-    // Brightening past the gamut desaturates (luminance kept) instead of clipping.
-    e = fitGamut(linearToSrgb(srgbToLinear(max(e, vec3(0.0))) * exp2(ev)), 1.0);
+    // Scaled by chroma so greys (and near-greys) are untouched. Lifts move
+    // the encoded luminance towards white (never past it), darkening scales
+    // it; the colour is re-lit in linear light and any channel pushed past 1
+    // is desaturated with the luminance kept (bright colours turn pastel).
+    float k = dl * smoothstep(0.0, ${f(HSL_LUM_CHROMA)}, maxc(e) - minc(e));
+    float p = encLuma(e);
+    float p2 = k > 0.0 ? p + max(1.0 - p, 0.0) * k * ${f(HSL_LUM_LIFT)} : p * (1.0 + k * ${f(HSL_LUM_DARKEN)});
+    float y = srgbToLinear1(p);
+    vec3 lin = srgbToLinear(max(e, vec3(0.0)));
+    if (y > 1e-7) e = fitGamut(linearToSrgb(lin * (srgbToLinear1(max(p2, 0.0)) / y)), 1.0);
   }
   return e;
 }
@@ -159,7 +167,7 @@ vec3 applyVibSat(vec3 e, float vib, float sat) {
     }
     e = scaleChroma(e, ye, fac);
   }
-  if (sat != 0.0) e = scaleChroma(e, ye, 1.0 + sat);
+  if (sat != 0.0) e = scaleChroma(e, vib != 0.0 ? encLuma(e) : ye, 1.0 + sat);
   return e;
 }
 
@@ -179,7 +187,7 @@ void main() {
     c = relight(c, y, globalToneLinear(y, uGlobalTone.x, uGlobalTone.y, uGlobalTone.z));
   }
 
-  vec3 e = linearToSrgb(c);
+  vec3 e = linearToSrgb(fitFloorLinear(c));
   if (uCurveOn) e = applyCurve(e);
   if (uHslOn) e = applyHsl(e);
   if (uGradeOn) e = applyGrade(e);
@@ -194,7 +202,7 @@ export interface DevelopNeeds {
   small: boolean;
   /** Medium guide blur (tone base, clarity, structure, dehaze). */
   medium: boolean;
-  /** Large guide blur (tone base, local contrast, dehaze compensation). */
+  /** Large guide blur (tone base for highlights/shadows and local contrast). */
   large: boolean;
   /** Full-colour neighbourhood for defringe. */
   fringe: boolean;
@@ -228,7 +236,7 @@ export const DEVELOP_BLURS: BlurRequest[] = [
   { uniform: 'uGuideS', source: 'uInput', prepass: GUIDE_LINEAR_PASS, sigma: sigmaIf((n) => n.small, BLUR_SIGMAS.small) },
   { uniform: 'uGuideM', source: 'uInput', prepass: GUIDE_LINEAR_PASS, sigma: sigmaIf((n) => n.medium, BLUR_SIGMAS.medium) },
   { uniform: 'uGuideL', source: 'uInput', prepass: GUIDE_LINEAR_PASS, sigma: sigmaIf((n) => n.large, BLUR_SIGMAS.large) },
-  { uniform: 'uFringeBlur', source: 'uInput', sigma: sigmaIf((n) => n.fringe, BLUR_SIGMAS.fringe) },
+  { uniform: 'uFringeBlur', source: 'uInput', prepass: FRINGE_SOURCE_PASS, sigma: sigmaIf((n) => n.fringe, BLUR_SIGMAS.fringe) },
 ];
 
 export function developUniforms(params: EditParams): UniformMap {

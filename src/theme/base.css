@@ -341,20 +341,25 @@ body {
 /*
  * "Raised" surface for the active segment of a segmented control / pressed
  * toolbar buttons: white on the light theme, one step lighter than the input
- * fill on the dark theme (as on the site). Derived from tokens only.
+ * fill on the dark theme (as on the site). Derived from tokens only — see
+ * docs/CONTRACT_CHANGES.md ([ui-kit]) for folding these into tokens.css.
  */
 :root {
   --k-raised: var(--k-surface);
+  /* Switch knob: white on light, light grey on dark (iOS-like contrast). */
+  --k-knob: var(--k-surface);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     --k-raised: var(--k-surface-3);
+    --k-knob: var(--k-text-2);
   }
 }
 
 :root[data-theme='dark'] {
   --k-raised: var(--k-surface-3);
+  --k-knob: var(--k-text-2);
 }
 
 /* Overlay root (dialogs, popovers, tooltips, toasts) — see kit/util.ts portalRoot(). */

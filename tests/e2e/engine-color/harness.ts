@@ -16,12 +16,14 @@ import {
 import type { PassContext } from '../../../src/editor/engine/pass-types';
 import type { EditParams, LocalAdjustments, Mask, PartialParams } from '../../../src/editor/types';
 import { MiniRunner, type Precision, type Tex } from './runner';
-import { flat, photo, ramps, type Rgb } from './synthetic';
+import { flat, hueSweep, photo, ramps, scene, type Rgb } from './synthetic';
 
 export type ImageSpec =
   | { kind: 'flat'; rgb: Rgb }
   | { kind: 'ramps' }
   | { kind: 'photo'; seed?: number }
+  | { kind: 'hues' }
+  | { kind: 'scene' }
   | { kind: 'data'; data: number[] };
 
 export type Stage = 'pre' | 'develop' | 'local';
@@ -46,6 +48,11 @@ export interface RunSpec {
   lens?: Partial<LensCorrection>;
   /** Run the LOCAL shader even when LOCAL_PASS.isIdentity() says it could be skipped. */
   forceLocal?: boolean;
+  /** run() only: box-downsample the float result by this integer factor before returning it. */
+  downsample?: number;
+  /** PNG only: crop rectangle (pixels) and integer nearest-neighbour zoom. */
+  crop?: { x: number; y: number; w: number; h: number };
+  zoom?: number;
 }
 
 export interface RunResult {
@@ -75,6 +82,10 @@ function makeImage(spec: RunSpec): Float32Array {
       return ramps(w, h);
     case 'photo':
       return photo(w, h, image.seed);
+    case 'hues':
+      return hueSweep(w, h);
+    case 'scene':
+      return scene(w, h);
     case 'data':
       return new Float32Array(image.data);
   }
@@ -154,26 +165,49 @@ function run(spec: RunSpec): { out: Tex; runner: MiniRunner; skipped: Stage[]; l
   return { out: cur, runner: r, skipped, lastStage: stages[stages.length - 1] };
 }
 
+function boxDown(px: Float32Array, w: number, h: number, f: number): { w: number; h: number; d: Float32Array } {
+  const ow = Math.floor(w / f);
+  const oh = Math.floor(h / f);
+  const d = new Float32Array(ow * oh * 4);
+  for (let y = 0; y < oh; y++)
+    for (let x = 0; x < ow; x++)
+      for (let k = 0; k < 4; k++) {
+        let acc = 0;
+        for (let j = 0; j < f; j++) for (let i = 0; i < f; i++) acc += px[((y * f + j) * w + x * f + i) * 4 + k];
+        d[(y * ow + x) * 4 + k] = acc / (f * f);
+      }
+  return { w: ow, h: oh, d };
+}
+
 function runFloat(spec: RunSpec): RunResult {
   const { out, runner: r, skipped } = run(spec);
-  return { width: out.width, height: out.height, data: Array.from(r.read(out)), skipped };
+  const px = r.read(out);
+  const f = Math.max(1, Math.round(spec.downsample ?? 1));
+  if (f === 1) return { width: out.width, height: out.height, data: Array.from(px), skipped };
+  const { w, h, d } = boxDown(px, out.width, out.height, f);
+  return { width: w, height: h, data: Array.from(d), skipped };
 }
 
 /** PNG (data URL) of the result; a linear result (last stage PRE) is sRGB-encoded first. */
 function runPng(spec: RunSpec): string {
   const { out, runner: r, lastStage } = run(spec);
   const px = r.read(out);
-  const img = new ImageData(out.width, out.height);
-  for (let i = 0; i < out.width * out.height; i++) {
-    for (let k = 0; k < 3; k++) {
-      const v = px[i * 4 + k];
-      img.data[i * 4 + k] = Math.round(Math.min(Math.max(lastStage === 'pre' ? linearToSrgb(v) : v, 0), 1) * 255);
+  const crop = spec.crop ?? { x: 0, y: 0, w: out.width, h: out.height };
+  const z = Math.max(1, Math.round(spec.zoom ?? 1));
+  const img = new ImageData(crop.w * z, crop.h * z);
+  for (let y = 0; y < crop.h * z; y++)
+    for (let x = 0; x < crop.w * z; x++) {
+      const si = ((crop.y + Math.floor(y / z)) * out.width + crop.x + Math.floor(x / z)) * 4;
+      const di = (y * crop.w * z + x) * 4;
+      for (let k = 0; k < 3; k++) {
+        const v = px[si + k];
+        img.data[di + k] = Math.round(Math.min(Math.max(lastStage === 'pre' ? linearToSrgb(v) : v, 0), 1) * 255);
+      }
+      img.data[di + 3] = 255;
     }
-    img.data[i * 4 + 3] = 255;
-  }
   const c = document.createElement('canvas');
-  c.width = out.width;
-  c.height = out.height;
+  c.width = img.width;
+  c.height = img.height;
   c.getContext('2d')!.putImageData(img, 0, 0);
   return c.toDataURL('image/png');
 }

@@ -11,8 +11,8 @@
 import { GLSL_COLOR_LIB } from '../../color/math';
 import type { EditParams } from '../../types';
 import type { PassContext, PassDef, UniformMap } from '../pass-types';
-import { calibrationMatrix, isCalibrationIdentity, shadowTintStops } from './calibration';
-import { LENS_VIG_EV, LENS_VIG_MID_MAX, glslFloat as f } from './constants';
+import { calibrationMatrix, calibrationStrength, isCalibrationIdentity, shadowTintStops } from './calibration';
+import { CAL_GAMUT_KNEE, LENS_VIG_EV, LENS_VIG_MID_MAX, glslFloat as f } from './constants';
 import { GLSL_HEADER } from './glsl-common';
 
 const FRAGMENT = /* glsl */ `${GLSL_HEADER}
@@ -23,6 +23,7 @@ uniform bool uCalOn;
 uniform vec3 uCalR;          // rows of the calibration matrix
 uniform vec3 uCalG;
 uniform vec3 uCalB;
+uniform float uCalKnee;      // soft gamut floor knee (ratio min/luma), grows with the slider strength
 uniform float uShadowTint;   // stops of green removed at black (positive = magenta)
 uniform bool uWbOn;
 uniform float uTemperature;  // ±100
@@ -38,7 +39,20 @@ void main() {
   vec3 c = src.rgb;
 
   if (uCalOn) {
-    c = vec3(dot(uCalR, c), dot(uCalG, c), dot(uCalB, c));
+    vec3 m = vec3(dot(uCalR, c), dot(uCalG, c), dot(uCalB, c));
+    // Moving primaries pushes saturated colours out of gamut (negative
+    // channels). Compress their chroma with a soft knee on r = min/luma so
+    // they approach the gamut edge smoothly instead of kinking there. Only
+    // colours with r below the knee change; the knee scales with the slider
+    // strength, so the effect fades in continuously from 0.
+    float y = luma(m);
+    float mn = min(m.r, min(m.g, m.b));
+    if (uCalKnee > 0.0 && y > 1e-6 && mn < uCalKnee * y) {
+      float r = mn / y;
+      float r2 = uCalKnee * exp((r - uCalKnee) / uCalKnee);
+      m = vec3(y) + (m - vec3(y)) * ((1.0 - r2) / (1.0 - r));
+    }
+    c = m;
     if (uShadowTint != 0.0) {
       // Green ↔ magenta, weighted to the shadows on perceptual luminance and
       // renormalized so the luminance is unchanged.
@@ -92,6 +106,7 @@ export function preUniforms(params: EditParams, ctx: PassContext): UniformMap {
     uCalR: m.slice(0, 3),
     uCalG: m.slice(3, 6),
     uCalB: m.slice(6, 9),
+    uCalKnee: calOn ? CAL_GAMUT_KNEE * calibrationStrength(cal) : 0,
     uShadowTint: shadowTintStops(cal),
     uWbOn: wb.temperature !== 0 || wb.tint !== 0,
     uTemperature: wb.temperature,

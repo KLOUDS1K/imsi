@@ -1,0 +1,87 @@
+/* Toasts — inverted pills stacked at the bottom centre, above the status bar. */
+
+.k-toaster {
+  position: fixed;
+  z-index: 30;
+  left: 50%;
+  bottom: calc(var(--k-statusbar-h) + 14px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.k-toast {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 440px;
+  min-height: 36px;
+  padding: 7px 8px 7px 12px;
+  border-radius: var(--k-radius);
+  background: var(--k-text);
+  color: var(--k-bg);
+  font-size: var(--k-fs);
+  line-height: 1.4;
+  box-shadow: var(--k-shadow-pop);
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+  transition:
+    opacity calc(var(--k-dur) * 1.4) var(--k-ease),
+    transform calc(var(--k-dur) * 1.4) var(--k-ease);
+}
+
+.k-toast.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+.k-toast.is-leaving {
+  opacity: 0;
+  transform: translateY(4px) scale(0.98);
+}
+
+.k-toast__icon {
+  flex: none;
+  opacity: 0.8;
+}
+
+.k-toast--success .k-toast__icon {
+  color: var(--k-success);
+  opacity: 1;
+}
+
+.k-toast--error .k-toast__icon {
+  color: var(--k-danger);
+  opacity: 1;
+}
+
+.k-toast__msg {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.k-toast__close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--k-radius-xs);
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+}
+
+.k-toast__close:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--k-bg) 14%, transparent);
+}

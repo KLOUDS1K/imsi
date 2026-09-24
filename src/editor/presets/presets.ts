@@ -117,17 +117,19 @@ export function presetLabel(preset: Pick<Preset, 'name'>, amount = 100): string 
 export function matchPattern(pattern: string, candidates: (string | undefined)[]): boolean {
   const values = candidates.filter((c): c is string => !!c);
   if (values.length === 0) return false;
-  const m = /^\/(.+)\/([a-z]*)$/.exec(pattern.trim());
+  let literal = pattern.trim();
+  const m = /^\/(.+)\/([a-z]*)$/.exec(literal);
   if (m) {
     try {
       const flags = (m[2] || 'i').replace(/[gy]/g, '');
       const re = new RegExp(m[1], flags);
       return values.some((v) => re.test(v));
     } catch {
-      // Invalid regex → fall back to a plain substring match of the whole pattern.
+      // Invalid regex → treat its body as a literal substring.
+      literal = m[1];
     }
   }
-  const p = pattern.trim().toLowerCase();
+  const p = literal.toLowerCase();
   return values.some((v) => v.toLowerCase().includes(p));
 }
 

@@ -1,0 +1,38 @@
+import { chromium } from '@playwright/test';
+const OUT = '/tmp/claude-0/-home-user-imsi/ede0a6e2-dda7-5164-a52e-6093ceba5907/scratchpad/smoke';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const logs = [];
+page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(`${m.type()}: ${m.text().slice(0, 300)}`); });
+page.on('pageerror', (e) => logs.push(`pageerror: ${e.message.slice(0, 300)}`));
+await page.goto('http://localhost:5301/', { waitUntil: 'networkidle' });
+await page.waitForSelector('.k-app', { timeout: 20000 });
+await page.waitForTimeout(1500);
+const btn = page.getByRole('button', { name: /sample/i }).first();
+console.log('sample button count', await page.getByRole('button', { name: /sample/i }).count());
+await btn.click();
+await page.waitForSelector('.k-tile', { timeout: 60000 }).catch(() => logs.push('no tiles'));
+await page.waitForTimeout(2500);
+await page.screenshot({ path: `${OUT}/library.png` });
+console.log('tiles', await page.locator('.k-tile').count());
+await page.locator('.k-tile').first().dblclick();
+await page.waitForTimeout(6000);
+const info = await page.evaluate(() => {
+  const rt = window.__kloud; const ctx = rt?.ctx;
+  const e = ctx?.engine; if (!e || !ctx.doc.value) return { module: ctx?.module.value, doc: !!ctx?.doc.value, engine: !!e };
+  const px = e.readPixels(64); let s = 0; for (let i = 0; i < px.data.length; i += 4) s += px.data[i] + px.data[i+1] + px.data[i+2];
+  return { module: ctx.module.value, doc: true, mean: s / (px.data.length / 4) / 3, w: px.width, h: px.height, caps: e.caps };
+});
+console.log('develop', JSON.stringify(info));
+await page.screenshot({ path: `${OUT}/develop.png` });
+// exposure change
+const before = info.mean;
+await page.evaluate(() => { const d = window.__kloud.ctx.doc.value; d.store.set('basic.exposure', 1); });
+await page.waitForTimeout(2500);
+const after = await page.evaluate(() => { const px = window.__kloud.ctx.engine.readPixels(64); let s = 0; for (let i = 0; i < px.data.length; i += 4) s += px.data[i] + px.data[i+1] + px.data[i+2]; return s / (px.data.length / 4) / 3; });
+console.log('exposure mean before/after', before, after);
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(1500);
+await page.screenshot({ path: `${OUT}/phone-develop.png` });
+console.log(logs.slice(0, 25).join('\n'));
+await browser.close();

@@ -280,3 +280,22 @@
   color: var(--k-text);
   background: var(--k-surface-3);
 }
+/* Crop controls only in the crop tool; compare controls outside it. */
+.k-vbar__group--crop {
+  display: none;
+}
+.k-vbar.is-crop .k-vbar__group--crop {
+  display: flex;
+}
+.k-vbar.is-crop .k-vbar__group--compare {
+  display: none;
+}
+/* The WB loupe is positioned by transform from the stage origin; shown only while picking. */
+.k-loupe {
+  left: 0;
+  top: 0;
+  display: none;
+}
+.k-loupe.is-on {
+  display: block;
+}

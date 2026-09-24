@@ -126,7 +126,8 @@ export async function mountKloudEditor(root: HTMLElement, options: MountOptions 
     if (gen !== generation) return;
     if (lib) {
       put(leftBody, lib.createLibrarySidebar(ctx));
-      put(mainBody, lib.createLibraryView(ctx));
+      // The shell toolbar already hosts the search pill and the grid/list toggle.
+      put(mainBody, (lib.createLibraryView as (c: AppContext, o?: { search?: boolean; viewToggle?: boolean }) => Mounted)(ctx, { search: false, viewToggle: false }));
     } else {
       put(mainBody, createFallbackLibraryView(rt, state));
     }
@@ -163,6 +164,11 @@ export async function mountKloudEditor(root: HTMLElement, options: MountOptions 
   /* ------------------------------ layout ------------------------------ */
   const applyLayout = () => {
     const layout = layoutFor(app.clientWidth || window.innerWidth);
+    const small = layout === 'narrow' || layout === 'phone';
+    const wasSmall = app.dataset.layout === 'narrow' || app.dataset.layout === 'phone';
+    // The sidebar is a drawer on small screens: start closed there.
+    if (small && !wasSmall) state.leftOpen.set(false);
+    if (!small && wasSmall) state.leftOpen.set(true);
     state.layout.set(layout);
     app.dataset.layout = layout;
   };

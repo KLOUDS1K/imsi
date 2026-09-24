@@ -1,0 +1,106 @@
+/* Tabs — underline (panel headers) and pill variants. */
+
+.k-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.k-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.k-tabs__tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: none;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--k-text-muted);
+  font-size: var(--k-fs-sm);
+  font-weight: var(--k-fw-medium);
+  white-space: nowrap;
+  touch-action: manipulation;
+  transition:
+    color var(--k-dur) var(--k-ease),
+    background-color var(--k-dur) var(--k-ease);
+}
+
+.k-tabs__tab:hover {
+  color: var(--k-text);
+}
+
+.k-tabs__tab[aria-selected='true'] {
+  color: var(--k-text);
+}
+
+.k-tabs__tab:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.k-tabs--stretch .k-tabs__tab {
+  flex: 1 1 0;
+}
+
+/* underline */
+.k-tabs--underline {
+  border-bottom: 1px solid var(--k-border);
+}
+
+.k-tabs--underline .k-tabs__tab::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--k-text);
+  transform: scaleX(0);
+  transition: transform calc(var(--k-dur) * 1.4) var(--k-ease);
+}
+
+.k-tabs--underline .k-tabs__tab[aria-selected='true']::after {
+  transform: none;
+}
+
+.k-tabs--underline .k-tabs__tab:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--k-accent-strong);
+  border-radius: var(--k-radius-xs);
+}
+
+/* pill */
+.k-tabs--pill {
+  padding: 2px;
+  border-radius: calc(var(--k-radius-sm) + 1px);
+  background: var(--k-surface-2);
+  box-shadow: inset 0 0 0 1px var(--k-border);
+}
+
+.k-tabs--pill .k-tabs__tab {
+  height: 26px;
+  border-radius: 5px;
+}
+
+.k-tabs--pill .k-tabs__tab[aria-selected='true'] {
+  background: var(--k-raised);
+  box-shadow: var(--k-shadow-sm), 0 0 0 1px var(--k-border);
+}
+
+.k-tabs__badge {
+  height: 15px;
+  min-width: 16px;
+}
+
+.k-tabs__panels > [role='tabpanel']:focus-visible {
+  box-shadow: none;
+}

@@ -91,8 +91,8 @@ vec2 latticeGradient(ivec2 c, uint seed) {
   float a = float(h.x) * (6.28318530718 / 4294967296.0);
   return vec2(cos(a), sin(a));
 }
-// Perlin gradient noise, zero mean, std ≈ 0.20 (normalized by GRAD_NOISE_STD).
-const float GRAD_NOISE_STD = 0.2;
+// Perlin gradient noise, zero mean, std ≈ 0.215, measured (normalized by GRAD_NOISE_STD).
+const float GRAD_NOISE_STD = 0.215;
 float gradientNoise(vec2 p, uint seed) {
   vec2 i = floor(p);
   vec2 f = p - i;

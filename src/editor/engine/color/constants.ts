@@ -90,11 +90,22 @@ export const CONTRAST_END_SLOPE = 0.4;
 /** Share of the contrast amount fed into saturation (Lightroom's contrast adds a little colour). */
 export const CONTRAST_SAT = 0.12;
 
-/* Edge-aware base: mix large → medium blur where they disagree, then → pixel. */
+/*
+ * Edge-aware tone bases. Each blurred mean is refined with a Lee (local
+ * Wiener) filter: base = mean + v/(v+eps)·(L − mean), v = local variance of L.
+ * Near strong edges v ≫ eps and the base follows the pixel (no halo, no
+ * gradient reversal inside small objects); in smooth or finely textured areas
+ * v ≪ eps and the base is the smooth local mean (detail preserved).
+ * eps are in EV² (tone-space variance).
+ */
+export const TONE_EPS_M = 0.25;
+export const TONE_EPS_L = 0.5;
+/** Mix large → medium base where their means disagree by this much (EV). */
 export const BASE_ML_LO = 0.35;
 export const BASE_ML_HI = 1.2;
-export const BASE_PIX_LO = 1.0;
-export const BASE_PIX_HI = 2.6;
+/** Safety net: follow the pixel where it is still this far (EV) from the base. */
+export const BASE_PIX_LO = 1.2;
+export const BASE_PIX_HI = 3.0;
 
 /* Presence (EV of detail gain per unit slider, i.e. at ±100). */
 export const TEXTURE_GAIN = 1.4;
@@ -126,13 +137,18 @@ export const LOCAL_CONTRAST_GAIN = 0.9;
 export const LOCAL_CONTRAST_SMOOTH = 0.8;
 export const LOCAL_CONTRAST_LIMIT = 1.0;
 
-/* Dehaze (dark channel prior in linear light, airlight = 1). */
-export const DEHAZE_OMEGA = 0.8;
-export const DEHAZE_T_MIN = 0.12;
+/* Dehaze (dark channel prior in linear light). */
+/** Assumed airlight (linear). Typical haze in a normally exposed photo sits around 0.5–0.8. */
+export const DEHAZE_AIRLIGHT = 0.85;
+export const DEHAZE_OMEGA = 0.85;
+export const DEHAZE_T_MIN = 0.15;
 /** Lee-filter epsilon for refining the blurred dark channel (linear² units). */
 export const DEHAZE_EPS = 0.0025;
-/** Share (in log) of the local brightness loss that is given back after haze removal. */
-export const DEHAZE_COMPENSATE = 0.55;
+/** Mild brightness give-back after veil removal: comp = t^(−γ) (γ in log2 per log2 t). */
+export const DEHAZE_COMPENSATE = 0.3;
+/** Positive texture is tapered on strong edges (fine std in EV) to avoid rims. */
+export const TEXTURE_EDGE_TAPER_LO = 0.5;
+export const TEXTURE_EDGE_TAPER_HI = 1.5;
 /** Negative dehaze: max veil opacity and airlight level (linear). */
 export const HAZE_ADD = 0.6;
 export const HAZE_AIRLIGHT = 0.78;

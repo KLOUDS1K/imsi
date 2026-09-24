@@ -1,0 +1,334 @@
+/* Slider + RangeSlider — thin 2px track, small round thumb, tabular readout. */
+
+.k-slider,
+.k-range {
+  --k-slider-thumb: 12px;
+  --k-slider-r: calc(var(--k-slider-thumb) / 2);
+  position: relative;
+  min-width: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.k-slider {
+  /* The row switches to the stacked layout when the slider itself is narrow. */
+  container-type: inline-size;
+}
+
+.k-slider__row {
+  display: grid;
+  grid-template-columns: minmax(56px, 36%) minmax(48px, 1fr) 46px;
+  grid-template-areas: 'label track value';
+  align-items: center;
+  column-gap: 8px;
+  min-height: 26px;
+}
+
+.k-slider__label {
+  grid-area: label;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--k-fs-sm);
+  color: var(--k-text-2);
+  cursor: default;
+  transition: color var(--k-dur) var(--k-ease);
+}
+
+.k-slider.is-modified .k-slider__label {
+  color: var(--k-text);
+}
+
+/* ---- track ---- */
+
+.k-slider__track,
+.k-range__track {
+  grid-area: track;
+  position: relative;
+  height: 24px;
+  cursor: pointer;
+  /* Vertical pans still scroll the panel; horizontal drags reach the slider. */
+  touch-action: pan-y;
+}
+
+.k-slider__rail,
+.k-range__rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: var(--k-border-strong);
+}
+
+.k-slider.has-gradient .k-slider__rail,
+.k-range.has-gradient .k-range__rail {
+  height: 4px;
+  box-shadow: inset 0 0 0 1px var(--k-border);
+}
+
+.k-slider__fill,
+.k-range__fill {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: var(--k-text-muted);
+  pointer-events: none;
+}
+
+.k-slider__fill {
+  left: calc(var(--k-slider-r) + (100% - var(--k-slider-thumb)) * var(--k-slider-a, 0));
+  width: calc((100% - var(--k-slider-thumb)) * (var(--k-slider-b, 0) - var(--k-slider-a, 0)));
+}
+
+.k-slider.is-modified .k-slider__fill {
+  background: var(--k-accent);
+}
+
+.k-slider.has-gradient .k-slider__fill,
+.k-slider--nofill .k-slider__fill {
+  display: none;
+}
+
+/* Marks the default of bipolar sliders (centre of Temperature, Exposure…). */
+.k-slider__tick {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--k-slider-r) + (100% - var(--k-slider-thumb)) * var(--k-slider-d, 0.5));
+  width: 1px;
+  height: 6px;
+  transform: translate(-50%, -50%);
+  background: var(--k-text-faint);
+  pointer-events: none;
+}
+
+/* ---- thumb ---- */
+
+.k-slider__thumb,
+.k-range__thumb {
+  position: absolute;
+  top: 50%;
+  width: var(--k-slider-thumb);
+  height: var(--k-slider-thumb);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--k-surface);
+  border: 1.5px solid var(--k-text-muted);
+  box-shadow: var(--k-shadow-sm);
+  touch-action: none;
+  transition:
+    border-color var(--k-dur) var(--k-ease),
+    transform var(--k-dur) var(--k-ease),
+    box-shadow var(--k-dur) var(--k-ease);
+}
+
+.k-slider__thumb {
+  left: calc(var(--k-slider-r) + (100% - var(--k-slider-thumb)) * var(--k-slider-t, 0));
+}
+
+.k-slider__track:hover .k-slider__thumb,
+.k-range__track:hover .k-range__thumb,
+.k-slider.is-modified .k-slider__thumb {
+  border-color: var(--k-text-2);
+}
+
+.k-slider.is-dragging .k-slider__thumb,
+.k-range__thumb.is-dragging {
+  transform: translate(-50%, -50%) scale(1.18);
+  border-color: var(--k-text);
+  box-shadow: 0 0 0 4px var(--k-accent-soft), var(--k-shadow-sm);
+}
+
+.k-slider__thumb:focus-visible,
+.k-range__thumb:focus-visible {
+  box-shadow: var(--k-focus-ring);
+  border-color: var(--k-text);
+}
+
+/* ---- readout ---- */
+
+.k-slider__value,
+.k-slider__input {
+  grid-area: value;
+  height: 20px;
+  font-size: var(--k-fs-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.k-slider__value {
+  justify-self: end;
+  min-width: 36px;
+  margin-right: -4px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--k-radius-xs);
+  background: transparent;
+  color: var(--k-text-muted);
+  cursor: text;
+  transition:
+    background-color var(--k-dur) var(--k-ease),
+    color var(--k-dur) var(--k-ease);
+}
+
+.k-slider__value:hover {
+  background: var(--k-surface-2);
+  color: var(--k-text);
+}
+
+.k-slider.is-modified .k-slider__value {
+  color: var(--k-text);
+  font-weight: var(--k-fw-medium);
+}
+
+.k-slider__input {
+  width: 100%;
+  min-width: 0;
+  padding: 0 4px;
+  border: 1px solid var(--k-accent-strong);
+  border-radius: var(--k-radius-xs);
+  background: var(--k-surface);
+  color: var(--k-text);
+}
+
+/* ---- stacked layout (option, or automatically when narrow) ---- */
+
+.k-slider--stacked .k-slider__row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'label value'
+    'track track';
+  min-height: 0;
+}
+
+.k-slider--stacked .k-slider__track {
+  height: 20px;
+}
+
+@container (max-width: 200px) {
+  .k-slider__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'label value'
+      'track track';
+    min-height: 0;
+  }
+
+  .k-slider__track {
+    height: 20px;
+  }
+}
+
+/* ---- disabled ---- */
+
+.k-slider.is-disabled,
+.k-range.is-disabled {
+  opacity: 0.45;
+}
+
+.k-slider.is-disabled .k-slider__track,
+.k-slider.is-disabled .k-slider__value,
+.k-range.is-disabled .k-range__track {
+  pointer-events: none;
+  cursor: default;
+}
+
+/* ---- RangeSlider ---- */
+
+.k-range__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 18px;
+}
+
+.k-range__label {
+  font-size: var(--k-fs-sm);
+  color: var(--k-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.k-range__value {
+  font-size: var(--k-fs-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--k-text-muted);
+  white-space: nowrap;
+}
+
+.k-range.is-modified .k-range__label,
+.k-range.is-modified .k-range__value {
+  color: var(--k-text);
+}
+
+.k-range__fill {
+  left: calc(var(--k-slider-r) + (100% - var(--k-slider-thumb)) * var(--k-range-lo, 0));
+  width: calc((100% - var(--k-slider-thumb)) * (var(--k-range-hi, 1) - var(--k-range-lo, 0)));
+  background: var(--k-accent);
+  background-clip: content-box;
+  /* A taller transparent hit area for dragging the whole range. */
+  height: 12px;
+  padding: 5px 0;
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.k-range.is-moving .k-range__fill {
+  cursor: grabbing;
+}
+
+/* With a gradient rail the range is shown by dimming what lies outside it. */
+.k-range.has-gradient .k-range__fill {
+  background: transparent;
+}
+
+.k-range__dim {
+  position: absolute;
+  top: 50%;
+  height: 6px;
+  transform: translateY(-50%);
+  background: var(--k-bg);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.k-range__dim--lo {
+  left: 0;
+  width: calc(var(--k-slider-r) + (100% - var(--k-slider-thumb)) * var(--k-range-lo, 0));
+}
+
+.k-range__dim--hi {
+  right: 0;
+  width: calc(var(--k-slider-r) + (100% - var(--k-slider-thumb)) * (1 - var(--k-range-hi, 1)));
+}
+
+.k-range__thumb--lo {
+  left: calc(var(--k-slider-r) + (100% - var(--k-slider-thumb)) * var(--k-range-lo, 0));
+}
+
+.k-range__thumb--hi {
+  left: calc(var(--k-slider-r) + (100% - var(--k-slider-thumb)) * var(--k-range-hi, 1));
+}
+
+@media (pointer: coarse) {
+  .k-slider,
+  .k-range {
+    --k-slider-thumb: 16px;
+  }
+
+  .k-slider__track,
+  .k-range__track {
+    height: 32px;
+  }
+
+  .k-slider__row {
+    min-height: 34px;
+  }
+}

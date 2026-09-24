@@ -1,0 +1,149 @@
+/* Section — collapsible develop-panel group with a site-style uppercase label. */
+
+.k-section {
+  border-bottom: 1px solid var(--k-border);
+}
+
+.k-section__header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 8px 0 4px;
+}
+
+.k-section--dense .k-section__header {
+  min-height: 28px;
+}
+
+.k-section__toggle {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--k-radius-xs);
+  background: transparent;
+  text-align: left;
+  /* .k-label look */
+  font-size: var(--k-fs-2xs);
+  font-weight: var(--k-fw-semibold);
+  letter-spacing: var(--k-label-tracking);
+  text-transform: uppercase;
+  color: var(--k-text-muted);
+  transition: color var(--k-dur) var(--k-ease);
+}
+
+.k-section__toggle:hover,
+.k-section.is-open .k-section__toggle {
+  color: var(--k-text-2);
+}
+
+.k-section__toggle:hover .k-section__chevron {
+  color: var(--k-text);
+}
+
+.k-section__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.k-section__chevron {
+  flex: none;
+  color: var(--k-text-faint);
+  transform: rotate(-90deg);
+  transition:
+    transform calc(var(--k-dur) * 1.4) var(--k-ease),
+    color var(--k-dur) var(--k-ease);
+}
+
+.k-section.is-open .k-section__chevron {
+  transform: none;
+}
+
+.k-section__badge {
+  flex: none;
+}
+
+.k-section__dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  margin-left: 2px;
+  border-radius: 50%;
+  background: var(--k-accent);
+  opacity: 0;
+  transform: scale(0.4);
+  transition:
+    opacity var(--k-dur) var(--k-ease),
+    transform var(--k-dur) var(--k-ease);
+}
+
+.k-section.is-modified .k-section__dot {
+  opacity: 1;
+  transform: none;
+}
+
+.k-section__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.k-section__actions:empty {
+  display: none;
+}
+
+.k-section__reset {
+  visibility: hidden;
+}
+
+.k-section.is-modified .k-section__reset {
+  visibility: visible;
+}
+
+/* ---- body: animated height via grid rows ---- */
+
+.k-section__body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows calc(var(--k-dur) * 1.6) var(--k-ease);
+}
+
+.k-section.is-open .k-section__body {
+  grid-template-rows: 1fr;
+}
+
+.k-section__clip {
+  min-height: 0;
+}
+
+.k-section:not(.is-open) .k-section__clip,
+.k-section.is-animating .k-section__clip {
+  overflow: hidden;
+}
+
+.k-section:not(.is-open):not(.is-animating) .k-section__clip {
+  visibility: hidden;
+}
+
+.k-section__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 14px 14px;
+  transition: opacity var(--k-dur) var(--k-ease);
+}
+
+.k-section--dense .k-section__content {
+  padding: 0 10px 10px;
+}
+
+.k-section.is-group-off .k-section__content {
+  opacity: 0.42;
+}

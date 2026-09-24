@@ -17,6 +17,7 @@ import {
   CLARITY_MID_LO0,
   CLARITY_MID_LO1,
   CLARITY_SMOOTH,
+  DEHAZE_AIRLIGHT,
   DEHAZE_COMPENSATE,
   DEHAZE_EPS,
   DEHAZE_OMEGA,
@@ -33,11 +34,15 @@ import {
   STRUCTURE_SMOOTH,
   TEXTURE_EDGE_HI,
   TEXTURE_EDGE_LO,
+  TEXTURE_EDGE_TAPER_HI,
+  TEXTURE_EDGE_TAPER_LO,
   TEXTURE_FLAT_HI,
   TEXTURE_FLAT_LO,
   TEXTURE_GAIN,
   TEXTURE_LIMIT,
   TEXTURE_SMOOTH,
+  TONE_EPS_L,
+  TONE_EPS_M,
   VAR_QUANT,
   glslFloat as f,
 } from './constants';
@@ -130,24 +135,16 @@ float localStd(vec2 g) {
  * large radius (see guide.ts), L in tone space.
  */
 export const GLSL_TONE_STAGE = /* glsl */ `
-// Edge-aware base for local tone mapping (tone space). The large blur gives
-// the most natural local adaptation but halos around big structures; where
-// it disagrees with the medium blur (a large edge is within reach) we slide
-// to the medium one, and right next to a hard edge — where the pixel itself
-// is far from any smooth base — we follow the pixel (pure global behaviour,
-// hence no halo at all).
-float toneBase(float L, float Lm, float Ll) {
-  float b = mix(Ll, Lm, smoothstep(${f(BASE_ML_LO)}, ${f(BASE_ML_HI)}, abs(Ll - Lm)));
-  return mix(b, L, smoothstep(${f(BASE_PIX_LO)}, ${f(BASE_PIX_HI)}, abs(L - b)));
+// Lee (local Wiener) gain v / (v + eps) from a guide's (E[L], E[L²]).
+float leeGain(vec2 g, float eps) {
+  float s = localStd(g);
+  float v = s * s;
+  return v / (v + eps);
 }
 
-float mediumBase(float L, float Lm) {
-  return mix(Lm, L, smoothstep(${f(BASE_PIX_LO)}, ${f(BASE_PIX_HI)}, abs(L - Lm)));
-}
-
-// Dark-channel refinement: a Lee (local Wiener) filter pulls the blurred
-// min-channel towards the pixel's own min-channel where the local variance
-// is high (edges), removing the classic DCP halos; capping at the pixel's
+// Dark-channel refinement: the same Lee filter pulls the blurred min-channel
+// towards the pixel's own min-channel where the local variance is high
+// (edges), removing the classic DCP halos; capping at the pixel's
 // min-channel guarantees the dehazed colour never goes negative.
 float refineDark(float minPix, float mean, float meanSq) {
   float v = max(meanSq - mean * mean, 0.0);
@@ -155,24 +152,34 @@ float refineDark(float minPix, float mean, float meanSq) {
   return clamp(min(mean + a * (minPix - mean), minPix), 0.0, 1.0);
 }
 
+// Transmission for a positive amount. dark/A is soft-capped at ~1 so bright
+// non-haze objects (clouds, white walls) are not treated as dense haze.
 float hazeTransmission(float dark, float amount) {
-  return max(1.0 - ${f(DEHAZE_OMEGA)} * amount * dark, ${f(DEHAZE_T_MIN)});
+  float d = dark / ${f(DEHAZE_AIRLIGHT)};
+  d = d * inversesqrt(sqrt(1.0 + d * d * d * d));
+  return max(1.0 - ${f(DEHAZE_OMEGA)} * amount * d, ${f(DEHAZE_T_MIN)});
 }
 
 // Presence ΔL (EV). p = (texture, clarity, structure, localContrast) in -1..1.
 //  texture:  fine band L − Ls, boosted only where there is fine structure
-//            (spares skin, sky); negative smooths it except on real edges.
-//  clarity:  mid band Ls − medium base, mid-tones only; negative softens.
+//            (spares skin, sky) and tapered on hard edges; negative smooths
+//            it except on real edges.
+//  clarity:  mid band Ls − bm (edge-aware medium base), mid-tones only;
+//            negative softens.
 //  structure: fine+mid detail weighted by medium-scale edge strength.
-//  local contrast: large band L − edge-aware large base.
-// Positive gains go through softLimit so large (edge) differences cannot
-// overshoot into halos.
+//  local contrast: large band L − edge-aware base.
+// Positive gains go through softLimit so large differences cannot overshoot.
 float presenceDelta(float L, float Ls, float bm, float bl, float stdS, float stdM, vec4 p) {
   float d = 0.0;
   if (p.x != 0.0) {
     float band = L - Ls;
-    if (p.x > 0.0) d += p.x * ${f(TEXTURE_GAIN)} * softLimit(band, ${f(TEXTURE_LIMIT)}) * smoothstep(${f(TEXTURE_FLAT_LO)}, ${f(TEXTURE_FLAT_HI)}, stdS);
-    else d += p.x * ${f(TEXTURE_SMOOTH)} * band * (1.0 - smoothstep(${f(TEXTURE_EDGE_LO)}, ${f(TEXTURE_EDGE_HI)}, stdS));
+    if (p.x > 0.0) {
+      float w = smoothstep(${f(TEXTURE_FLAT_LO)}, ${f(TEXTURE_FLAT_HI)}, stdS)
+              * (1.0 - 0.7 * smoothstep(${f(TEXTURE_EDGE_TAPER_LO)}, ${f(TEXTURE_EDGE_TAPER_HI)}, stdS));
+      d += p.x * ${f(TEXTURE_GAIN)} * softLimit(band, ${f(TEXTURE_LIMIT)}) * w;
+    } else {
+      d += p.x * ${f(TEXTURE_SMOOTH)} * band * (1.0 - smoothstep(${f(TEXTURE_EDGE_LO)}, ${f(TEXTURE_EDGE_HI)}, stdS));
+    }
   }
   if (p.y != 0.0) {
     float band = Ls - bm;
@@ -194,7 +201,7 @@ float presenceDelta(float L, float Ls, float bm, float bl, float stdS, float std
 // Apply the same per-pixel dehaze to a tone-space guide value.
 float dehazeL(float L, float t, float comp, float veil) {
   float y = toneY(L);
-  y = veil > 0.0 ? mix(y, ${f(HAZE_AIRLIGHT)}, veil) : max((y - (1.0 - t)) / t, 0.0) * comp;
+  y = veil > 0.0 ? mix(y, ${f(HAZE_AIRLIGHT)}, veil) : max((y - ${f(DEHAZE_AIRLIGHT)} * (1.0 - t)) / t, 0.0) * comp;
   return toneL(y);
 }
 
@@ -208,8 +215,12 @@ vec3 toneStage(vec3 c, vec4 gs, vec4 gm, vec4 gl, float ev, float dehaze, vec2 h
   float Ls = exposeL(gs.x, ev);
   float Lm = exposeL(gm.x, ev);
   float Ll = exposeL(gl.x, ev);
+  // Statistics of the original guides (a global exposure or dehaze changes
+  // the means, the edge/texture decisions stay the same).
   float stdS = localStd(gs.xy);
   float stdM = localStd(gm.xy);
+  float aM = leeGain(gm.xy, ${f(TONE_EPS_M)});
+  float aL = leeGain(gl.xy, ${f(TONE_EPS_L)});
 
   if (dehaze != 0.0) {
     float k = exp2(ev);
@@ -217,15 +228,12 @@ vec3 toneStage(vec3 c, vec4 gs, vec4 gm, vec4 gl, float ev, float dehaze, vec2 h
     float comp = 1.0;
     float veil = 0.0;
     if (dehaze > 0.0) {
+      // I = J·t + A·(1 − t)  →  J = (I − A·(1 − t)) / t, then a mild
+      // brightness give-back t^−γ so the result is not simply darker.
       float dark = refineDark(clamp(minc(c), 0.0, 1.0), gm.z * k, gm.w * k * k);
       t = hazeTransmission(dark, dehaze);
-      // Give back part of the local brightness the veil removal takes away
-      // (measured on the large-scale mean), keeping the contrast gain.
-      float tl = hazeTransmission(clamp(gl.z * k, 0.0, 1.0), dehaze);
-      float ym = toneY(Ll);
-      float yd = (ym - (1.0 - tl)) / tl;
-      comp = clamp(pow(ym / max(yd, 1e-4), ${f(DEHAZE_COMPENSATE)}), 1.0, 4.0);
-      c = (c - vec3(1.0 - t)) / t * comp;
+      comp = pow(t, -${f(DEHAZE_COMPENSATE)});
+      c = (c - vec3(${f(DEHAZE_AIRLIGHT)} * (1.0 - t))) / t * comp;
     } else {
       // Negative: add a veil, thicker where the scene is already bright/hazy.
       veil = -dehaze * ${f(HAZE_ADD)} * (0.45 + 0.55 * smoothstep(0.0, 0.5, gm.z * k));
@@ -241,9 +249,15 @@ vec3 toneStage(vec3 c, vec4 gs, vec4 gm, vec4 gl, float ev, float dehaze, vec2 h
   bool presOn = any(notEqual(presence, vec4(0.0)));
   if (hsOn || presOn) {
     float L = toneL(luma(c));
-    float base = toneBase(L, Lm, Ll);
+    // Edge-aware bases (Lee-refined means), mixed large → medium where the
+    // two scales disagree (a big structure nearby), and finally following
+    // the pixel where it is still far from any smooth base.
+    float bm = Lm + aM * (L - Lm);
+    float bl = Ll + aL * (L - Ll);
+    float base = mix(bl, bm, smoothstep(${f(BASE_ML_LO)}, ${f(BASE_ML_HI)}, abs(Ll - Lm)));
+    base = mix(base, L, smoothstep(${f(BASE_PIX_LO)}, ${f(BASE_PIX_HI)}, abs(L - base)));
     if (hsOn) dL += highlightsDelta(base, hs.x) + shadowsDelta(base, hs.y);
-    if (presOn) dL += presenceDelta(L, Ls, mediumBase(L, Lm), base, stdS, stdM, presence);
+    if (presOn) dL += presenceDelta(L, Ls, bm, base, stdS, stdM, presence);
   }
   return c * exp2(dL);
 }

@@ -49,6 +49,13 @@ vec3 lensToSource(vec2 l) {
 }
 
 vec4 sampleImage(sampler2D t, vec2 uv, vec2 jx, vec2 jy, float footprint) {
+  // Snap positions within 1/1000 texel of a texel centre onto it: varying
+  // interpolation leaves ~1e-5 texel of float noise, which would otherwise
+  // make identity/90° copies inexact.
+  vec2 ts = vec2(textureSize(t, 0));
+  vec2 tp = uv * ts - 0.5;
+  vec2 tr = floor(tp + 0.5);
+  uv = (mix(tp, tr, step(abs(tp - tr), vec2(1e-3))) + 0.5) / ts;
   if (footprint > 1.25) {
     // Minification: box-filter the pixel footprint (jx/jy = source uv per output pixel).
     int n = int(clamp(ceil(footprint), 2.0, 4.0));

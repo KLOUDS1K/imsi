@@ -140,6 +140,8 @@ void main() {
 /* ------------------------------------------------------------------ */
 
 const halationAmount = (p: EditParams) => clamp01(p.effects.halation / 100);
+/** Linear max-channel level where halation starts: only near-clipped highlights scatter. */
+const halationThreshold = (p: EditParams) => lerp(0.92, 0.7, halationAmount(p));
 
 /** Shared by the prepass and the composite (to keep the highlight cores untinted). */
 const HALATION_LIB = /* glsl */ `
@@ -148,7 +150,7 @@ uniform float uHalThreshold;
 vec3 halationSource(vec4 c) {
   vec3 lin = srgbToLinear(max(c.rgb, 0.0));
   float br = max(max(lin.r, lin.g), lin.b);
-  return vec3(luma(lin) * smoothstep(uHalThreshold, uHalThreshold + 0.3, br)) * HALATION_TINT * c.a;
+  return vec3(luma(lin) * smoothstep(uHalThreshold, uHalThreshold + 0.25, br)) * HALATION_TINT * c.a;
 }
 `;
 
@@ -162,7 +164,7 @@ void main() { outColor = vec4(halationSource(texture(uInput, vUv)), 1.0); }
 `,
   ),
   inputs: ['uInput'],
-  uniforms: (p) => ({ uHalThreshold: lerp(0.75, 0.45, halationAmount(p)) }),
+  uniforms: (p) => ({ uHalThreshold: halationThreshold(p) }),
 };
 
 export const HALATION_PASS: PassDef = {
@@ -192,7 +194,7 @@ void main() {
     { uniform: 'uHalNear', source: 'uInput', sigma: 4, prepass: HALATION_EXTRACT },
     { uniform: 'uHalFar', source: 'uInput', sigma: 16, prepass: HALATION_EXTRACT },
   ],
-  uniforms: (p) => ({ uHalAmount: halationAmount(p) * 2.2, uHalThreshold: lerp(0.75, 0.45, halationAmount(p)) }),
+  uniforms: (p) => ({ uHalAmount: halationAmount(p) * 1.8, uHalThreshold: halationThreshold(p) }),
   isIdentity: (p) => !(p.effects.halation > 0),
 };
 

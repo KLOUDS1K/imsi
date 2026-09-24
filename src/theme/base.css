@@ -333,3 +333,32 @@ body {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
+
+/* ------------------------------------------------------------------ */
+/* Kit-level derived tokens                                            */
+/* ------------------------------------------------------------------ */
+
+/*
+ * "Raised" surface for the active segment of a segmented control / pressed
+ * toolbar buttons: white on the light theme, one step lighter than the input
+ * fill on the dark theme (as on the site). Derived from tokens only.
+ */
+:root {
+  --k-raised: var(--k-surface);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --k-raised: var(--k-surface-3);
+  }
+}
+
+:root[data-theme='dark'] {
+  --k-raised: var(--k-surface-3);
+}
+
+/* Overlay root (dialogs, popovers, tooltips, toasts) — see kit/util.ts portalRoot(). */
+.k-portal {
+  position: relative;
+  z-index: 1000;
+}

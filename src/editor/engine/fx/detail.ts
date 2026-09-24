@@ -265,7 +265,7 @@ const LUMA_CONTRAST_PASS: PassDef = {
     {
       uniform: 'uLcResidual',
       source: 'uInput',
-      sigma: (p) => 1.0 + 2.5 * clamp01(p.noise.luminance / 100),
+      sigma: (p) => 1.0 + 1.5 * clamp01(p.noise.luminance / 100),
       prepass: LUMA_RESIDUAL_PREPASS,
     },
   ],

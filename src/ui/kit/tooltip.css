@@ -1,0 +1,50 @@
+/* Tooltip — inverted pill (text colour background) so it reads in both themes. */
+
+.k-tooltip {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: 4px 8px;
+  border-radius: var(--k-radius-sm);
+  background: var(--k-text);
+  color: var(--k-bg);
+  font-size: var(--k-fs-xs);
+  font-weight: var(--k-fw-medium);
+  line-height: 1.35;
+  letter-spacing: 0.005em;
+  box-shadow: var(--k-shadow-pop);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity var(--k-dur) var(--k-ease),
+    transform var(--k-dur) var(--k-ease);
+}
+
+.k-tooltip[data-placement^='top'] {
+  transform: translateY(-2px);
+}
+
+.k-tooltip.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.k-tooltip__keys {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.k-tooltip__key {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--k-bg) 16%, transparent);
+  font: inherit;
+  font-size: var(--k-fs-2xs);
+  text-align: center;
+  opacity: 0.85;
+}

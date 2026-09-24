@@ -129,6 +129,11 @@ export interface AppContext {
   retouchBrush: Signal<{ size: number; feather: number; opacity: number }>;
   /** Params used for the 'compare' slot (before / snapshot); null = defaults ("original"). */
   compareParams: Signal<EditParams | null>;
+  /**
+   * Temporary params rendered INSTEAD of the doc's params without touching the
+   * store (live preset preview on hover, AI style preview). null = normal.
+   */
+  previewParams: Signal<EditParams | null>;
   /** Reference photo id for 'reference' compare mode. */
   referenceId: Signal<string | null>;
   /** Copy/paste clipboard for settings. */

@@ -126,6 +126,8 @@ test.describe.serial('KLOUD Studio', () => {
     await settle(page, 800);
     expect(await meanLuma(page)).toBeGreaterThan(5);
     await expect(page.getByRole('slider', { name: 'Exposure' })).toBeVisible();
+    // The status bar zoom must reflect the laid-out canvas, not the pre-layout first render.
+    await expect(page.locator('.k-sb__zoom')).toHaveText(/^Fit · [1-9]\d*%$/);
   });
 
   test('exposure slider: keyboard edits are one undoable step', async () => {

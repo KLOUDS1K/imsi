@@ -33,10 +33,15 @@
   background: var(--k-accent-soft);
   color: var(--k-text);
 }
-.k-batch-groups,
 .k-batch-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.k-batch-groups {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px 16px;
 }
 .k-batch-groups__cat {

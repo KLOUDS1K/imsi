@@ -21,7 +21,12 @@ const pct = (v: number) => `${Math.round(v * 100)}%`;
 function reportRows(a: ImageAnalysis): [string, string][] {
   return [
     ['Scene', `${a.scene.label} (${pct(a.scene.confidence)})`],
-    ['Exposure', `${a.exposure.verdict === 'ok' ? 'Balanced' : a.exposure.verdict === 'under' ? 'Under' : 'Over'} · ${a.exposure.evOffset >= 0 ? '+' : ''}${a.exposure.evOffset.toFixed(1)} EV`],
+    [
+      'Exposure',
+      a.scene.label === 'night' && a.exposure.evOffset > 1
+        ? 'Low-key (night)'
+        : `${a.exposure.verdict === 'ok' ? 'Balanced' : a.exposure.verdict === 'under' ? 'Under' : 'Over'} · ${a.exposure.evOffset >= 0 ? '+' : ''}${a.exposure.evOffset.toFixed(1)} EV`,
+    ],
     ['Dynamic range', `${a.dynamicRange.stops.toFixed(1)} stops`],
     ['White balance', a.whiteBalance.castDescription || 'Neutral'],
     ['Noise', `${Math.round(a.noise.level)} / 100`],

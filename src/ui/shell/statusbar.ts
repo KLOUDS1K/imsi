@@ -115,9 +115,12 @@ export function createAppStatusBar(rt: AppRuntime): AppStatusBar {
   d.add(ctx.doc.subscribe(queueZoom));
   // The fit scale is only known once the viewer has sized the canvas and the first frame rendered.
   if (ctx.engine) d.add(ctx.engine.onRendered(() => queueZoom()));
-  // The viewport size changes the fit scale.
+  // The viewport size changes the fit scale. The canvas is watched too: a photo's
+  // first render can land before the viewer has sized it, and later frames are
+  // only re-presented (no new render), so onRendered alone would leave "0%".
   const ro = new ResizeObserver(queueZoom);
   ro.observe(document.documentElement);
+  if (ctx.engine) ro.observe(ctx.engine.canvas);
   d.add(() => ro.disconnect());
 
   d.add(

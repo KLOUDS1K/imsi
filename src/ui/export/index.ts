@@ -45,6 +45,43 @@ function textInput(value: string, onInput: (v: string) => void, placeholder = ''
   return h('input', { class: 'k-exp__input', type: 'text', value, placeholder, oninput: (e: Event) => onInput((e.target as HTMLInputElement).value) });
 }
 
+/** Running inside another page's frame (e.g. a sandboxed preview), where downloads may be blocked. */
+function isFramed(): boolean {
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Fallback for framed previews: show the exported image so it can be saved
+ * with the browser's own "Save image" (right-click / long-press).
+ */
+function showFramedResult(results: ExportResult[]): void {
+  const first = results[0];
+  const viewable = results.length === 1 && /^image\/(jpeg|png|webp)$/.test(first.blob.type);
+  const url = viewable ? URL.createObjectURL(first.blob) : null;
+  const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`);
+  const content = h(
+    'div',
+    { class: 'k-exp-result' },
+    url ? h('img', { class: 'k-exp-result__img', src: url, alt: first.fileName }) : null,
+    h('p', { class: 'k-exp-result__name' }, results.length === 1 ? `${first.fileName} · ${kb(first.blob.size)}` : `${results.length} files`),
+    h(
+      'p',
+      { class: 'k-exp-result__hint' },
+      url
+        ? 'This page runs inside a preview frame that can block downloads. If nothing was saved, right-click (or long-press) the image and choose Save image.'
+        : 'This page runs inside a preview frame that can block downloads. If nothing was saved, open the editor in its own tab or on the site to export.',
+    ),
+  );
+  const dlg = openDialog<'close'>({ title: 'Export ready', content, size: 'md', actions: [{ label: 'Done', value: 'close', variant: 'primary' }] });
+  void dlg.result.finally(() => {
+    if (url) URL.revokeObjectURL(url);
+  });
+}
+
 export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
   const ids = photoIds.length ? photoIds : ctx.doc.value ? [ctx.doc.value.photoId] : ctx.selection.value;
   if (!ids.length) {
@@ -375,6 +412,7 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
       if (errors.length) ctx.toast(`Exported ${results.length}, failed ${errors.length}: ${errors[0]}`, 'error', 8000);
       else if (results.length) ctx.toast(`Exported ${results.length} photo${results.length === 1 ? '' : 's'}.`, 'success');
       dialog.close('export');
+      if (results.length && isFramed()) showFramedResult(results);
     } finally {
       ctx.busy.set({ active: false });
       dialog.setBusy(false);

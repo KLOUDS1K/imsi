@@ -35,7 +35,8 @@ export function estimateSharpness(px: PixelBuffer): { score: number; blurry: boo
   return { score, blurry: score < BLURRY_BELOW };
 }
 
-function classifyScene(
+/** Rule-based scene label (exported for tests). */
+export function classifyScene(
   meta: PhotoMeta | undefined,
   exp: ReturnType<typeof exposureStats>,
   sky: ReturnType<typeof detectSky>,
@@ -44,7 +45,12 @@ function classifyScene(
   sharp: number,
 ): { label: SceneLabel; confidence: number; tags: string[] } {
   const tags: string[] = [];
-  const faces = skin.blobs.filter((b) => b.faceLike).length;
+  const faceBlobs = skin.blobs.filter((b) => b.faceLike);
+  const faces = faceBlobs.length;
+  // A portrait needs a face that is a real part of the frame; tiny skin-toned
+  // blobs are usually lamps, windows or distant people (tagged, not labelled).
+  const portraitFace = faceBlobs.some((b) => b.area >= 0.008);
+  const groupFaces = faceBlobs.filter((b) => b.area >= 0.003).length;
   const night = exp.medianLum < 0.035 && ((meta?.shutter ?? 0) >= 1 / 30 || (meta?.iso ?? 0) >= 1600 || exp.meanLum < 0.03);
   if (night) tags.push('low light');
   if (sky.present) tags.push(`${sky.kind} sky`);
@@ -53,8 +59,8 @@ function classifyScene(
   if (col.all.white > 0.35 && exp.medianLum > 0.35) tags.push('snow/bright');
   let label: SceneLabel = 'general';
   let confidence = 0.4;
-  if (faces >= 2) [label, confidence] = ['group', 0.7];
-  else if (faces === 1 || skin.fraction > 0.12) [label, confidence] = ['portrait', 0.65];
+  if (groupFaces >= 2) [label, confidence] = ['group', 0.7];
+  else if (portraitFace || skin.fraction > 0.12) [label, confidence] = ['portrait', 0.65];
   else if (night) [label, confidence] = ['night', 0.75];
   else if (sky.present && sky.kind === 'sunset') [label, confidence] = ['sunset', 0.7];
   else if (col.all.white > 0.35 && exp.medianLum > 0.35) [label, confidence] = ['snow', 0.55];
@@ -80,7 +86,10 @@ export function analyzeImage(px: PixelBuffer, meta?: PhotoMeta): ImageAnalysis {
   const sharp = sharpnessScore(sharpnessRatio(gradientPlanes(plane), sigma).ratio);
   const scene = classifyScene(meta, exp, sky, skin, col, sharp);
   const notes: string[] = [];
-  if (exp.verdict === 'under') notes.push(`Underexposed by about ${Math.abs(exp.evOffset).toFixed(1)} EV.`);
+  // Night / low-key scenes are dark on purpose: don't call them underexposed.
+  const lowKey = scene.label === 'night' && exp.verdict === 'under';
+  if (lowKey) notes.push('Low-key night scene: kept dark, only shadows and noise are handled.');
+  else if (exp.verdict === 'under') notes.push(`Underexposed by about ${Math.abs(exp.evOffset).toFixed(1)} EV.`);
   if (exp.verdict === 'over') notes.push(`Overexposed by about ${Math.abs(exp.evOffset).toFixed(1)} EV.`);
   if (exp.clipHigh > 0.01) notes.push(`${(exp.clipHigh * 100).toFixed(1)}% of pixels are clipped highlights.`);
   if (exp.clipLow > 0.02) notes.push(`${(exp.clipLow * 100).toFixed(1)}% of pixels are crushed blacks.`);
@@ -89,7 +98,7 @@ export function analyzeImage(px: PixelBuffer, meta?: PhotoMeta): ImageAnalysis {
   if (sharp < BLURRY_BELOW) notes.push('The image looks soft or out of focus.');
   if (sky.present) notes.push(`Sky covers ${Math.round(sky.fraction * 100)}% of the frame.`);
   return {
-    exposure: { meanLum: exp.meanLum, medianLum: exp.medianLum, p01: exp.p01, p99: exp.p99, evOffset: exp.evOffset, verdict: exp.verdict },
+    exposure: { meanLum: exp.meanLum, medianLum: exp.medianLum, p01: exp.p01, p99: exp.p99, evOffset: exp.evOffset, verdict: lowKey ? 'ok' : exp.verdict },
     dynamicRange: { stops: exp.stops, clippedHighlights: exp.clipHigh, clippedShadows: exp.clipLow, contrast: exp.rmsContrast },
     whiteBalance: { temperature: wb.temperature, tint: wb.tint, confidence: wb.confidence, castDescription: wb.castDescription },
     color: { colorfulness: col.colorfulness, meanSaturation: col.meanSaturation, dominantHues: col.dominantHues },
@@ -129,6 +138,12 @@ export function generateAutoEdit(
   const id = opts.idFactory ?? (() => `auto-${Date.now().toString(36)}-${n++}`);
   const tone = solveTone(toneInputsFromAnalysis(a));
   const scene = a.scene.label;
+  if (scene === 'night') {
+    // Keep the mood: a modest lift instead of normalising the histogram to daylight.
+    tone.exposure = Math.min(tone.exposure, 0.8);
+    tone.shadows = Math.min(tone.shadows, 25);
+    tone.blacks = Math.min(tone.blacks, 0);
+  }
   const out: PartialParams = {
     basic: {
       exposure: r2(tone.exposure * k),

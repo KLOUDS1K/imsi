@@ -17,10 +17,10 @@ function rand(seed: number): () => number {
   };
 }
 
-function glow(g: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, alpha = 1): void {
+function glow(g: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, alpha = 1, edge = 'rgba(0,0,0,0)'): void {
   const grad = g.createRadialGradient(x, y, 0, x, y, r);
   grad.addColorStop(0, color);
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, edge);
   g.globalAlpha = alpha;
   g.fillStyle = grad;
   g.fillRect(x - r, y - r, r * 2, r * 2);
@@ -120,12 +120,17 @@ const mountainLake: Painter = (g) => {
   sky.addColorStop(1, '#a9cdee');
   g.fillStyle = sky;
   g.fillRect(0, 0, W, H);
-  for (let i = 0; i < 26; i++) {
+  // Soft, flat cumulus: squashed glows that fade to transparent white (no dark fringe).
+  for (let i = 0; i < 22; i++) {
     const x = r() * W;
-    const y = H * (0.08 + r() * 0.25);
-    glow(g, x, y, 90 + r() * 140, 'rgba(255,255,255,0.55)', 0.8);
+    const y = H * (0.07 + r() * 0.2);
+    g.save();
+    g.translate(x, y);
+    g.scale(2.2, 0.55);
+    glow(g, 0, 0, 60 + r() * 90, 'rgba(255,255,255,0.7)', 0.75, 'rgba(255,255,255,0)');
+    g.restore();
   }
-  const ridge = (base: number, amp: number, color: string, seed: number) => {
+  const ridge = (base: number, amp: number, color: string | CanvasGradient, seed: number) => {
     const rr = rand(seed);
     g.fillStyle = color;
     g.beginPath();
@@ -140,11 +145,13 @@ const mountainLake: Painter = (g) => {
     g.closePath();
     g.fill();
   };
-  ridge(H * 0.42, 22, '#6d86a6', 3);
+  // Far range with snow on the peaks (fades into the rock colour).
+  const snow = g.createLinearGradient(0, H * 0.42 - 22 * 6, 0, H * 0.46);
+  snow.addColorStop(0, '#eef3f9');
+  snow.addColorStop(0.35, '#b9c8da');
+  snow.addColorStop(1, '#6d86a6');
+  ridge(H * 0.42, 22, snow, 3);
   ridge(H * 0.48, 26, '#4c6380', 5);
-  // snow caps
-  g.fillStyle = 'rgba(255,255,255,0.35)';
-  g.fillRect(0, H * 0.36, W, H * 0.02);
   ridge(H * 0.54, 18, '#2f4a3c', 9);
   // lake
   const lake = g.createLinearGradient(0, H * 0.6, 0, H);
@@ -153,6 +160,10 @@ const mountainLake: Painter = (g) => {
   g.fillStyle = lake;
   g.fillRect(0, H * 0.6, W, H * 0.4);
   g.save();
+  // Reflection stays on the water.
+  g.beginPath();
+  g.rect(0, H * 0.6, W, H * 0.4);
+  g.clip();
   g.globalAlpha = 0.35;
   g.translate(0, H * 1.2);
   g.scale(1, -1);

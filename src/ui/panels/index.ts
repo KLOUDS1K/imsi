@@ -18,6 +18,7 @@ import { createToneCurveSection } from './edit/tone-curve';
 import { createHealPanel } from './heal';
 import { createHistogramBlock } from './histogram';
 import { createMasksPanel } from './masks/panel';
+import { openDevelopMenu } from './develop-menu';
 
 export { createDevelopLeftPanel } from './left';
 
@@ -72,6 +73,9 @@ export function createDevelopRightPanel(ctx: AppContext): { el: HTMLElement; dis
     d.add(() => btn.destroy());
     return { id: t.id, btn };
   });
+  const more = createIconButton({ icon: 'more-horizontal', label: 'Develop actions', onClick: () => openDevelopMenu(ctx, more.el) });
+  d.add(() => more.destroy());
+  toolBar.append(more.el);
   const el = h('aside', { class: 'k-pnl k-pnl-right', attrs: { 'aria-label': 'Develop panel' } }, hist.el, toolBar, body);
 
   let current: ToolPanel | null = null;
@@ -127,6 +131,16 @@ export function registerPanelCommands(ctx: AppContext): () => void {
         const name = await ctx.prompt({ title: 'New snapshot', value: `Snapshot ${store.snapshots.length + 1}`, confirmLabel: 'Save' });
         if (name) store.createSnapshot(name.trim());
       },
+    }),
+  );
+  d.add(
+    ctx.commands.register({
+      id: 'develop.resetAll',
+      label: 'Reset all settings',
+      keys: ['Shift+Mod+R'],
+      group: 'Develop',
+      when: inDevelop,
+      run: () => ctx.doc.value?.store.reset('Reset All'),
     }),
   );
   d.add(ctx.commands.register({ id: 'develop.toolEdit', label: 'Edit panel', keys: ['E'], group: 'Develop', when: inDevelop, run: () => ctx.tool.set('edit') }));

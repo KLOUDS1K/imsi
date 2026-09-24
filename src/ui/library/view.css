@@ -470,3 +470,40 @@
     display: none;
   }
 }
+/* Toolbar buttons built from plain <button>s: match the kit's ghost buttons. */
+.k-lib__filterbtn,
+.k-lib__iconbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--k-border);
+  border-radius: var(--k-radius-sm);
+  background: var(--k-surface);
+  color: var(--k-text-2);
+  font: inherit;
+  font-size: var(--k-fs-sm);
+  cursor: pointer;
+  transition: background var(--k-dur) var(--k-ease), color var(--k-dur) var(--k-ease);
+}
+.k-lib__iconbtn {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+}
+.k-lib__filterbtn:hover,
+.k-lib__iconbtn:hover {
+  background: var(--k-surface-3);
+  color: var(--k-text);
+}
+.k-lib__filterbtn[aria-expanded='true'] {
+  border-color: var(--k-accent);
+  background: var(--k-accent-soft);
+  color: var(--k-text);
+}
+.k-lib__filterbtn:focus-visible,
+.k-lib__iconbtn:focus-visible {
+  outline: none;
+  box-shadow: var(--k-focus-ring);
+}

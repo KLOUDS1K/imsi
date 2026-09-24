@@ -1,11 +1,11 @@
 /** Develop left panel: navigator slot, presets (live hover preview), snapshots, history. */
 import type { AppContext } from '../../app/context';
 import { applyPreset, BUILTIN_PRESETS, createPreset, exportPresets, importPresetFile } from '../../editor/presets';
-import { modifiedGroups } from '../../editor/state';
 import type { EditParams, Preset } from '../../editor/types';
 import { clear, Disposer, h } from '../dom';
 import { createIconButton, createSection, createSlider, openMenu, type MenuItem } from '../kit';
 import { DocBinder } from './binding';
+import { openCreatePresetDialog } from './preset-dialog';
 import { pickFiles, relativeTime, saveBlob } from './util';
 
 export function createDevelopLeftPanel(ctx: AppContext, opts: { navigator?: HTMLElement } = {}): { el: HTMLElement; dispose(): void } {
@@ -134,16 +134,7 @@ export function createDevelopLeftPanel(ctx: AppContext, opts: { navigator?: HTML
     icon: 'plus',
     label: 'Create preset from current settings',
     size: 'sm',
-    onClick: async () => {
-      const params = b.params;
-      if (!params) return ctx.toast('Open a photo first.', 'info');
-      const name = await ctx.prompt({ title: 'New preset', label: 'Name', placeholder: 'My look', confirmLabel: 'Create' });
-      if (!name) return;
-      const groups = modifiedGroups(params, ctx.doc.value?.isRaw);
-      if (groups.length === 0) return ctx.toast('Nothing to save: every setting is at its default.', 'info');
-      await ctx.savePreset(createPreset(name.trim(), params, groups, { group: 'User Presets' }));
-      ctx.toast(`Saved preset “${name.trim()}” (${groups.length} groups).`, 'success');
-    },
+    onClick: () => void openCreatePresetDialog(ctx),
   });
   const importBtn = createIconButton({
     icon: 'upload',

@@ -82,3 +82,23 @@
   color: var(--k-text-muted);
   font-size: var(--k-fs-xs);
 }
+button.k-libside__twisty {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--k-text-faint);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+button.k-libside__twisty:hover {
+  color: var(--k-text);
+  background: var(--k-surface-3);
+}

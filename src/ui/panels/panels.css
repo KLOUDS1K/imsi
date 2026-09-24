@@ -430,3 +430,33 @@
 .k-pnl-hist-entry.is-future {
   opacity: 0.45;
 }
+/* dialog forms (new preset) */
+.k-pnl-form__field {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+.k-pnl-form__label {
+  color: var(--k-text-muted);
+  font-size: var(--k-fs-xs);
+}
+.k-pnl-form__ctl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.k-pnl-form__input {
+  font: inherit;
+  color: var(--k-text);
+  background: var(--k-surface-2);
+  border: 1px solid var(--k-border);
+  border-radius: var(--k-radius-sm);
+  padding: 5px 8px;
+  width: 100%;
+  min-width: 0;
+}
+.k-pnl-form__input[type='number'] {
+  width: 90px;
+}

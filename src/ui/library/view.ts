@@ -199,7 +199,7 @@ export function createLibraryView(ctx: AppContext, opts: LibraryViewOptions = {}
     sizeSlider.el.hidden = m !== 'grid';
     setNavigator(ctx, {
       el: m === 'grid' ? v.el : (v.el.querySelector<HTMLElement>('.k-list__body') ?? v.el),
-      columns: () => ('columns' in v ? v.columns() : 1),
+      columns: () => (m === 'grid' ? (v as PhotoGrid).columns() : 1),
       pageRows: () => v.pageRows(),
       reveal: (id) => v.reveal(id),
     });

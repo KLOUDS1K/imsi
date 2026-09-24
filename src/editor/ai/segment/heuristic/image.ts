@@ -105,7 +105,7 @@ export function prepare(px: PixelBuffer, maxSide: number): Img {
 }
 
 /** Separable box mean with radius r (edge windows normalized by their true size). */
-export function boxBlur(src: Float32Array, w: number, h: number, r: number, out = new Float32Array(w * h)): Float32Array {
+export function boxBlur(src: Float32Array, w: number, h: number, r: number, out: Float32Array = new Float32Array(w * h)): Float32Array {
   if (r <= 0) {
     out.set(src);
     return out;

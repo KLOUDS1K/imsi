@@ -38,8 +38,10 @@ numerals; the accent marks the active/modified state. Everything must work in bo
 | --- | --- | --- |
 | `src/editor/types.ts`, `defaults.ts`, `contracts.ts`, `color/*`, `src/app/context.ts`, `src/ui/dom.ts`, `src/ui/signal.ts`, `src/theme/tokens.css` | foundation (read-only for everyone) | Change only by editing the contract deliberately and noting it in `docs/CONTRACT_CHANGES.md`. |
 | `src/editor/state/`, `src/editor/presets/` | state | EditorStore, params math, XMP, presets |
-| `src/editor/engine/` (incl. `geometry.ts`) | engine-core | WebGL2 pipeline infra, geometry, detail, masks/heal passes, effects, display, export render |
-| `src/editor/engine/color/` | engine-color | develop shaders: WB, exposure, tone, curve, HSL, grading, calibration, presence, dehaze, defringe |
+| `src/editor/engine/pass-types.ts` | foundation | PassDef contract between the orchestrator and the pass modules |
+| `src/editor/engine/*` (except the three below) | engine-core | WebGL2 context, textures/FBOs, pass runner, blur mechanism, pipeline orchestration, masks/patches upload, present (zoom/compare/clipping/overlay), readback, export render, caps |
+| `src/editor/engine/color/` | engine-color | PassDefs: PRE (calibration, WB, exposure, lens vignetting), DEVELOP (dehaze, tone, presence, curve, HSL, grading, vibrance/saturation, defringe), LOCAL (mask adjustments) |
+| `src/editor/engine/fx/`, `src/editor/engine/geometry.ts` | engine-fx | PassDefs: HEAL/clone, DETAIL (NR, AI denoise, sharpen), GEOMETRY (lens distortion, CA, orientation, straighten/transform, crop), EFFECTS (bloom, glow, halation, vignette, grain) + the CPU geometry mirror |
 | `src/editor/io/`, `src/editor/lens/` | io | decode (JPEG/PNG/WebP/TIFF/RAW), EXIF, thumbnails, lens profiles |
 | `src/editor/export/`, `src/editor/watermark/` | export | encoders, ICC, EXIF writer, TIFF/DNG, resize, sharpening, zip |
 | `src/editor/analysis/` | analysis | histogram/scopes, auto tone/WB, image analysis, auto edit, level/perspective, dust |
@@ -66,6 +68,22 @@ Use the `@/` alias for `src/`.
 
 `engine/geometry.ts` implements the forward/inverse mapping on the CPU with exactly the math used by the geometry
 shader. The viewer uses it to convert pointer positions to source coordinates.
+
+## Sign conventions (engine, analysis, UI must agree)
+
+- Texture/image coordinates: (0,0) = top-left, y down (see `engine/pass-types.ts`).
+- `crop.angle` and `transform.rotate`: positive = image content rotates **clockwise** on screen.
+- `crop.orientation`: clockwise quarter turns. Applied before flips; flips are in the oriented space.
+- `transform.vertical = v`: let `k = 0.4 * v / 100`. The frame is warped by a projective transform that scales the
+  TOP edge width by `(1 + k)` and the BOTTOM edge by `(1 - k)` (positive v widens the top, correcting verticals that
+  converge upward when shooting up at a building).
+- `transform.horizontal = v`: same with `k = 0.4 * v / 100`, scaling the RIGHT edge height by `(1 + k)` and the LEFT
+  edge by `(1 - k)`.
+- `transform.aspect = a`: horizontal stretch `2^(a/100 * 0.5)` (positive = wider), vertical `1 / that`.
+- `transform.scale` %: uniform zoom about the centre (100 = none). `offsetX/offsetY` ±100 shift the content by up to
+  50% of the frame width/height (positive = right/down).
+- `lens.distortion = d` (manual): adds `k1 += -0.15 * d/100` to the correction (positive d removes barrel distortion).
+- Brush sizes and heal radii are fractions of the source long edge.
 
 ## Render pipeline (WebGL2, RGBA16F where supported, linear-light working space = linear sRGB/Rec.709, unclamped)
 

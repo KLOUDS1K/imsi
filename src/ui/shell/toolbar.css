@@ -1,0 +1,130 @@
+/* App toolbar (site archive bar). Layout rules only; controls are kit components. */
+
+.k-tb {
+  gap: 4px;
+  padding-left: max(8px, env(safe-area-inset-left));
+  padding-right: max(10px, env(safe-area-inset-right));
+}
+
+.k-tb .k-breadcrumb-nav {
+  margin-left: 6px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.k-tb__modules {
+  margin-left: 10px;
+}
+
+/* Text-only module switch on wide screens (like the site's segmented toggles); icons on phones. */
+.k-tb__modules .k-seg__btn > svg {
+  display: none;
+}
+
+/* Visually hidden but still the accessible name. */
+.k-tb__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Module-specific groups. */
+.k-tb[data-module='develop'] .k-tb__library,
+.k-tb[data-module='library'] .k-tb__develop {
+  display: none;
+}
+
+.k-tb__library {
+  gap: 6px;
+}
+
+.k-tb__develop {
+  gap: 2px;
+}
+
+.k-tb__search {
+  flex: 0 1 auto;
+  min-width: 120px;
+}
+
+.k-tb__export {
+  flex: none;
+  margin-left: 4px;
+}
+
+/* The hamburger only exists when the sidebar is a drawer. */
+.k-tb__drawer-group {
+  display: none;
+}
+
+/* Tablet: tighter search, no text on the module switch icons already shown. */
+@media (max-width: 1024px) {
+  .k-tb__search {
+    width: 170px !important;
+  }
+}
+
+@media (max-width: 820px) {
+  .k-tb__drawer-group {
+    display: flex;
+  }
+
+  .k-tb .k-nav-arrows {
+    display: none;
+  }
+
+  .k-tb__paneltoggle:first-of-type {
+    display: none;
+  }
+}
+
+/* Phones: icons only, the essentials. */
+@media (max-width: 640px) {
+  .k-tb {
+    gap: 2px;
+  }
+
+  .k-tb__modules {
+    margin-left: 2px;
+  }
+
+  .k-tb__modules .k-seg__btn > svg {
+    display: block;
+  }
+
+  .k-tb__modules .k-seg__btn > span,
+  .k-tb__export .k-btn__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .k-tb__viewtoggle,
+  .k-tb__paneltoggle,
+  .k-tb__before,
+  .k-tb__help,
+  .k-tb .k-toolbar__divider {
+    display: none;
+  }
+
+  .k-tb__search {
+    min-width: 0;
+    width: 112px !important;
+  }
+
+  .k-tb .k-breadcrumb-nav {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .k-tb__search {
+    display: none;
+  }
+}

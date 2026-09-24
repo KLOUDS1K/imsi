@@ -1,0 +1,84 @@
+/* Library sidebar — flat Finder-style list under the KLOUD wordmark. */
+.k-libside {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  font-size: var(--k-fs-sm);
+}
+.k-libside__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.k-libside__section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.k-libside__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px 4px;
+}
+.k-libside__list,
+.k-libside__tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.k-libside__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--k-radius-sm);
+  background: none;
+  color: var(--k-text-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.k-libside__row:hover {
+  background: var(--k-surface-3);
+  color: var(--k-text);
+}
+.k-libside__row.is-active {
+  background: var(--k-surface-2);
+  color: var(--k-text);
+  font-weight: var(--k-fw-medium);
+}
+.k-libside__row.is-drop {
+  outline: 2px solid var(--k-accent);
+}
+.k-libside__row svg {
+  color: var(--k-text-muted);
+  flex: none;
+}
+.k-libside__row .k-badge {
+  margin-left: auto;
+}
+.k-libside__twisty {
+  display: inline-flex;
+  color: var(--k-text-faint);
+  margin-left: -4px;
+}
+.k-libside__hint {
+  padding: 2px 8px;
+  color: var(--k-text-faint);
+  font-size: var(--k-fs-xs);
+}
+.k-libside__footer {
+  padding: 8px 16px;
+  border-top: 1px solid var(--k-border);
+  color: var(--k-text-muted);
+  font-size: var(--k-fs-xs);
+}

@@ -1,0 +1,116 @@
+.k-exp {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  font-size: var(--k-fs-sm);
+}
+.k-exp__col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.k-exp__col .k-label {
+  margin-top: 8px;
+}
+.k-exp__field {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+.k-exp__label {
+  color: var(--k-text-muted);
+  font-size: var(--k-fs-xs);
+}
+.k-exp__ctl,
+.k-exp__row,
+.k-exp__pair {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.k-exp__input {
+  font: inherit;
+  color: var(--k-text);
+  background: var(--k-surface-2);
+  border: 1px solid var(--k-border);
+  border-radius: var(--k-radius-sm);
+  padding: 4px 8px;
+  min-width: 0;
+  width: 100%;
+  max-width: 220px;
+}
+.k-exp__pair .k-exp__input {
+  width: 88px;
+}
+.k-exp__quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.k-exp__chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--k-border-strong);
+  background: var(--k-surface-2);
+  color: var(--k-text-2);
+  font: inherit;
+  font-size: var(--k-fs-xs);
+  cursor: pointer;
+}
+.k-exp__chip:hover {
+  border-color: var(--k-accent);
+  color: var(--k-text);
+}
+.k-exp__pos {
+  display: grid;
+  grid-template-columns: repeat(3, 22px);
+  gap: 4px;
+}
+.k-exp__posbtn {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid var(--k-border-strong);
+  background: var(--k-surface-2);
+  cursor: pointer;
+  padding: 0;
+}
+.k-exp__posbtn.is-on {
+  background: var(--k-accent);
+  border-color: var(--k-accent-strong);
+}
+.k-exp__color {
+  width: 36px;
+  height: 24px;
+  border: 1px solid var(--k-border);
+  border-radius: var(--k-radius-sm);
+  background: none;
+  padding: 0;
+}
+.k-exp__preview {
+  width: 100%;
+  height: auto;
+  border-radius: var(--k-radius);
+  background: var(--k-surface-2);
+  margin-top: 6px;
+}
+.k-exp__hint {
+  margin: 0;
+  color: var(--k-text-faint);
+  font-size: var(--k-fs-2xs);
+}
+.k-exp__example {
+  font-family: var(--k-font-mono);
+  font-size: var(--k-fs-xs);
+  color: var(--k-text-2);
+  word-break: break-all;
+}
+@media (max-width: 720px) {
+  .k-exp {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,52 @@
+.k-film {
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--k-toolbar);
+  border-top: 1px solid var(--k-border);
+  scrollbar-width: thin;
+}
+.k-film__track {
+  display: flex;
+  gap: 6px;
+  height: 100%;
+  padding: 8px 10px;
+  width: max-content;
+}
+.k-film__cell {
+  position: relative;
+  height: 100%;
+  aspect-ratio: 3 / 2;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--k-radius-sm);
+  background: var(--k-surface-2);
+  overflow: hidden;
+  cursor: pointer;
+  flex: none;
+}
+.k-film__cell:hover {
+  border-color: var(--k-border-strong);
+}
+.k-film__cell.is-current {
+  border-color: var(--k-accent);
+}
+.k-film__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.k-film__stars {
+  position: absolute;
+  left: 4px;
+  bottom: 2px;
+  font-size: 9px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+.k-film__flag {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}

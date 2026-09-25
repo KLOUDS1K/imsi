@@ -104,13 +104,14 @@ test('lightbox prefers edits, switches versions, exposes both downloads, and zoo
 
   await page.goto('/');
   await page.getByRole('link', { name: 'View Edited handoff' }).click();
-  await expect(page.locator('.viewer__badge')).toHaveText('Edited');
-  await expect(page.getByRole('button', { name: 'Download the original of Edited handoff' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Download the edited version of Edited handoff' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Edit the original/ })).toHaveCount(0);
+  const lightbox = page.locator('[data-role="lightbox"]');
+  await expect(lightbox.locator('.viewer__badge')).toHaveText('Edited');
+  await expect(lightbox.getByRole('button', { name: 'Download the original of Edited handoff' })).toBeVisible();
+  await expect(lightbox.getByRole('button', { name: 'Download the edited version of Edited handoff' })).toBeVisible();
+  await expect(lightbox.getByRole('button', { name: /Edit the original/ })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Show original version of Edited handoff' }).click();
-  await expect(page.locator('.viewer__badge')).toHaveText('Original');
+  await expect(lightbox.locator('.viewer__badge')).toHaveText('Original');
   await expect(page.getByRole('button', { name: 'Show edited version of Edited handoff' })).toBeVisible();
 
   const figure = page.locator('.viewer__figure');

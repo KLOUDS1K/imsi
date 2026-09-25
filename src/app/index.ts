@@ -32,6 +32,8 @@ export interface MountOptions {
   embedded?: boolean;
   /** Optional host-app navigation rendered in the Studio toolbar. */
   exit?: { label?: string; onExit(): void };
+  /** Optional host save action, used when Studio edits an archive photo. */
+  publish?: { label?: string; onPublish(ctx: AppContext): void | Promise<void> };
   onReady?: (ctx: AppContext) => void;
 }
 
@@ -80,6 +82,9 @@ export async function mountKloudEditor(root: HTMLElement, options: MountOptions 
 
   const toolbar = createAppToolbar(rt, state, {
     exit: options.exit,
+    publish: options.publish
+      ? { label: options.publish.label, onPublish: () => options.publish?.onPublish(ctx) }
+      : undefined,
     openDrawer: () => state.leftOpen.set(!state.leftOpen.value),
     openHelp: () => openShortcutsHelp(rt),
     libraryUp: () => {

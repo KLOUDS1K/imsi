@@ -13,6 +13,9 @@ export const keys = {
   original: (id: string, filename: string) => `originals/${id}/${filename}`,
   preview: (id: string) => `preview/${id}`,
   thumb: (id: string) => `thumb/${id}`,
+  edited: (id: string, revision: string) => `edited/${id}/${revision}/full`,
+  editedPreview: (id: string, revision: string) => `edited/${id}/${revision}/preview`,
+  editedThumb: (id: string, revision: string) => `edited/${id}/${revision}/thumb`,
 }
 
 export async function putOriginal(

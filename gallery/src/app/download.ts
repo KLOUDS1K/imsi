@@ -10,16 +10,25 @@
 import type { Photo } from '../shared/types'
 import { mediaUrl } from '../shared/types'
 
-export function downloadOriginal(photo: Photo): void {
+function download(href: string, filename: string): void {
   const a = document.createElement('a')
-  a.href = mediaUrl.download(photo.id)
+  a.href = href
   // A hint only — the server's Content-Disposition is authoritative, and it
   // always names the file exactly as it was uploaded.
-  a.download = photo.filename
+  a.download = filename
   a.rel = 'noopener'
   a.style.display = 'none'
   document.body.appendChild(a)
   a.click()
   // Give the navigation a tick to start before detaching the node.
   setTimeout(() => a.remove(), 1000)
+}
+
+export function downloadOriginal(photo: Photo): void {
+  download(mediaUrl.downloadOriginal(photo.id), photo.filename)
+}
+
+export function downloadEdited(photo: Photo): void {
+  if (!photo.editedUrl) return
+  download(mediaUrl.downloadEdited(photo.id), photo.editedFilename ?? `edited-${photo.filename}`)
 }

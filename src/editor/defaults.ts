@@ -176,6 +176,7 @@ export function createDefaultWatermark(): WatermarkSettings {
     position: 'bottom-right',
     size: 2.2,
     opacity: 70,
+    blendMode: 'normal',
     margin: 3,
     shadow: true,
   };

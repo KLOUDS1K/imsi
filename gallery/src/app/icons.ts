@@ -52,6 +52,7 @@ export const icons: Record<string, string> = {
 
   upload: wrap('<path d="M12 16V4"/><path d="m7.5 8.5 4.5-4.5 4.5 4.5"/><path d="M4.5 15.5v2.8A2.2 2.2 0 0 0 6.7 20.5h10.6a2.2 2.2 0 0 0 2.2-2.2v-2.8"/>'),
   download: wrap('<path d="M12 4v12"/><path d="m7.5 11.5 4.5 4.5 4.5-4.5"/><path d="M4.5 15.5v2.8A2.2 2.2 0 0 0 6.7 20.5h10.6a2.2 2.2 0 0 0 2.2-2.2v-2.8"/>'),
+  eye: wrap('<path d="M2.8 12s3.2-6 9.2-6 9.2 6 9.2 6-3.2 6-9.2 6-9.2-6-9.2-6Z"/><circle cx="12" cy="12" r="2.7"/>'),
   close: wrap('<path d="M6 6l12 12M18 6 6 18"/>'),
   check: wrap('<path d="m5 12.5 4.5 4.5L19 7.5"/>'),
   pencil: wrap('<path d="M4.5 19.5h3.2L18.4 8.8a2.26 2.26 0 0 0-3.2-3.2L4.5 16.3Z"/><path d="m14.2 6.6 3.2 3.2"/>'),

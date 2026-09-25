@@ -151,7 +151,7 @@ export async function mediaTokenIsValid(
  */
 export async function mediaHref(
   env: Env,
-  kind: 't' | 'p' | 'o',
+  kind: 't' | 'p' | 'o' | 'et' | 'ep' | 'e',
   photoId: string,
 ): Promise<string> {
   return mediaPath(kind, photoId, await mediaToken(env, photoId))
@@ -163,7 +163,7 @@ export async function mediaHref(
  * once per photo rather than once per URL is the difference between one HMAC
  * per row and three.
  */
-export function mediaPath(kind: 't' | 'p' | 'o', photoId: string, token: string): string {
+export function mediaPath(kind: 't' | 'p' | 'o' | 'et' | 'ep' | 'e', photoId: string, token: string): string {
   return `/media/${kind}/${photoId}?t=${token}`
 }
 

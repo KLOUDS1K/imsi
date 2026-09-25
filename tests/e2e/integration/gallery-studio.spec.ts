@@ -20,23 +20,106 @@ test('gallery opens a stored original directly in Studio', async ({ page }) => {
     createdAt: 1,
     thumbUrl: `/media/t/${PHOTO_ID}?sig=test`,
     previewUrl: `/media/p/${PHOTO_ID}?sig=test`,
+    originalThumbUrl: `/media/t/${PHOTO_ID}?sig=test`,
+    originalPreviewUrl: `/media/p/${PHOTO_ID}?sig=test`,
     originalUrl: `/media/o/${PHOTO_ID}?sig=test`,
+    editedUrl: null,
+    editedPreviewUrl: null,
+    editedThumbUrl: null,
+    editedFilename: null,
+    editedSize: null,
+    editedType: null,
+    editedWidth: null,
+    editedHeight: null,
+    editedUpdatedAt: null,
   };
 
-  await page.route('**/api/tree', (route) => route.fulfill({ json: { folders: [], admin: false, siteTitle: 'KLOUD.PHOTOGRAPHY' } }));
-  await page.route('**/api/browse?**', (route) => route.fulfill({ json: { folder: null, path: [], folders: [], photos: [photo], admin: false, lock: null } }));
+  await page.route('**/api/tree', (route) => route.fulfill({ json: { folders: [], admin: true, siteTitle: 'KLOUD.PHOTOGRAPHY' } }));
+  await page.route('**/api/browse?**', (route) => route.fulfill({ json: { folder: null, path: [], folders: [], photos: [photo], admin: true, lock: null } }));
+  await page.route('**/api/admin/session', (route) => route.fulfill({ json: { authenticated: true, username: 'test' } }));
   await page.route('**/api/hit', (route) => route.fulfill({ json: { ok: true } }));
   await page.route('**/media/**', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: PNG }));
 
   await page.goto('/');
   await expect(page.getByRole('link', { name: 'Open KLOUD Studio' })).toBeVisible();
   await page.getByRole('link', { name: 'View Studio handoff' }).click();
-  await page.getByRole('button', { name: 'Edit Studio handoff in KLOUD Studio' }).click();
+  await page.getByRole('button', { name: 'Edit the original of Studio handoff in KLOUD Studio' }).click();
 
-  await expect(page).toHaveURL(/\/studio$/);
+  await expect(page).toHaveURL(new RegExp(`/studio\\?photo=${PHOTO_ID}$`));
   await expect(page.locator('.k-app[data-module="develop"]')).toBeVisible({ timeout: 30_000 });
   const back = page.getByRole('button', { name: 'Back to photos' });
   await expect(back).toBeVisible();
   await back.click();
   await expect(page).toHaveURL(new RegExp(`[?&]p=${PHOTO_ID}(?:&|$)`));
+});
+
+test('anonymous visitors cannot see or open Studio', async ({ page }) => {
+  await page.route('**/api/tree', (route) => route.fulfill({ json: { folders: [], admin: false, siteTitle: 'KLOUD.PHOTOGRAPHY' } }));
+  await page.route('**/api/browse?**', (route) => route.fulfill({ json: { folder: null, path: [], folders: [], photos: [], admin: false, lock: null } }));
+  await page.route('**/api/hit', (route) => route.fulfill({ json: { ok: true } }));
+  await page.route('**/api/admin/session', (route) => route.fulfill({ json: { authenticated: false, username: null } }));
+  await page.route('**/api/admin/setup', (route) => route.fulfill({ json: { needsSetup: false, requiresKey: false } }));
+
+  await page.goto('/');
+  await expect(page.getByRole('link', { name: 'Open KLOUD Studio' })).toBeHidden();
+  await page.goto('/studio');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+});
+
+test('lightbox prefers edits, switches versions, exposes both downloads, and zooms at the pointer', async ({ page }) => {
+  const photo = {
+    id: PHOTO_ID,
+    folderId: '',
+    title: 'Edited handoff',
+    date: null,
+    location: '',
+    description: '',
+    width: 1,
+    height: 1,
+    placeholder: null,
+    filename: 'original.png',
+    size: PNG.byteLength,
+    type: 'image/png',
+    createdAt: 1,
+    thumbUrl: `/media/et/${PHOTO_ID}?t=test`,
+    previewUrl: `/media/ep/${PHOTO_ID}?t=test`,
+    originalThumbUrl: `/media/t/${PHOTO_ID}?t=test`,
+    originalPreviewUrl: `/media/p/${PHOTO_ID}?t=test`,
+    originalUrl: `/media/o/${PHOTO_ID}?t=test`,
+    editedUrl: `/media/e/${PHOTO_ID}?t=test`,
+    editedPreviewUrl: `/media/ep/${PHOTO_ID}?t=test`,
+    editedThumbUrl: `/media/et/${PHOTO_ID}?t=test`,
+    editedFilename: 'original_edited.jpg',
+    editedSize: PNG.byteLength,
+    editedType: 'image/jpeg',
+    editedWidth: 1,
+    editedHeight: 1,
+    editedUpdatedAt: 2,
+  };
+  await page.route('**/api/tree', (route) => route.fulfill({ json: { folders: [], admin: false, siteTitle: 'KLOUD.PHOTOGRAPHY' } }));
+  await page.route('**/api/browse?**', (route) => route.fulfill({ json: { folder: null, path: [], folders: [], photos: [photo], admin: false, lock: null } }));
+  await page.route('**/api/hit', (route) => route.fulfill({ json: { ok: true } }));
+  await page.route('**/media/**', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: PNG }));
+
+  await page.goto('/');
+  await page.getByRole('link', { name: 'View Edited handoff' }).click();
+  const lightbox = page.locator('[data-role="lightbox"]');
+  await expect(lightbox.locator('.viewer__badge')).toHaveText('Edited');
+  await expect(lightbox.getByRole('button', { name: 'Download the original of Edited handoff' })).toBeVisible();
+  await expect(lightbox.getByRole('button', { name: 'Download the edited version of Edited handoff' })).toBeVisible();
+  await expect(lightbox.getByRole('button', { name: /Edit the original/ })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Show original version of Edited handoff' }).click();
+  await expect(lightbox.locator('.viewer__badge')).toHaveText('Original');
+  await expect(page.getByRole('button', { name: 'Show edited version of Edited handoff' })).toBeVisible();
+
+  const figure = page.locator('.viewer__figure');
+  await figure.click({ position: { x: 0, y: 0 } });
+  await expect(page.locator('.viewer__stage')).toHaveClass(/is-zoomed/);
+  const beforeWheel = await figure.evaluate((node) => getComputedStyle(node).transform);
+  await figure.hover({ position: { x: 0, y: 0 } });
+  await page.mouse.wheel(0, -200);
+  const afterWheel = await figure.evaluate((node) => getComputedStyle(node).transform);
+  expect(afterWheel).not.toBe(beforeWheel);
 });

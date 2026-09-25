@@ -6,9 +6,11 @@ import type { WatermarkModule } from '@/editor/contracts';
 import type { RenderedImage, WatermarkSettings } from '@/editor/types';
 import { ensureFont, fontStack } from './fonts';
 import { layoutImage, layoutText, type Ctx2D, type WatermarkLayout } from './layout';
+import { blendWatermarkChannel } from './blend';
 
 export { fontStack, ensureFont } from './fonts';
 export type { WatermarkLayout, Box } from './layout';
+export { blendWatermarkChannel } from './blend';
 
 /* ---------------- logo cache ---------------- */
 
@@ -138,9 +140,11 @@ export async function applyWatermark(img: RenderedImage, wm: WatermarkSettings):
       if (a === 0) continue;
       const A = a / 255;
       const k = 1 - A;
-      data[d] = data[d] * k + px[s] * scale * A + bias;
-      data[d + 1] = data[d + 1] * k + px[s + 1] * scale * A + bias;
-      data[d + 2] = data[d + 2] * k + px[s + 2] * scale * A + bias;
+      const max = 255 * scale;
+      const mode = wm.blendMode ?? 'normal';
+      data[d] = data[d] * k + blendWatermarkChannel(mode, px[s] * scale, data[d], max) * A + bias;
+      data[d + 1] = data[d + 1] * k + blendWatermarkChannel(mode, px[s + 1] * scale, data[d + 1], max) * A + bias;
+      data[d + 2] = data[d + 2] * k + blendWatermarkChannel(mode, px[s + 2] * scale, data[d + 2], max) * A + bias;
       // Alpha: "over" onto (usually opaque) image.
       const da = data[d + 3];
       data[d + 3] = da + (scale * 255 - da) * A + bias;
@@ -232,6 +236,9 @@ export async function renderWatermarkPreview(canvas: HTMLCanvasElement, wm: Wate
     ctx.rect(ix, iy, iw, ih);
     ctx.clip();
     ctx.translate(ix, iy);
+    ctx.globalCompositeOperation = wm.blendMode === 'normal' || !wm.blendMode
+      ? 'source-over'
+      : wm.blendMode;
     mark.draw(ctx);
   }
   ctx.restore();

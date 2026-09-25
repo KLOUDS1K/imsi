@@ -1,0 +1,9 @@
+ALTER TABLE photos ADD COLUMN edited_key TEXT;
+ALTER TABLE photos ADD COLUMN edited_preview_key TEXT;
+ALTER TABLE photos ADD COLUMN edited_thumb_key TEXT;
+ALTER TABLE photos ADD COLUMN edited_filename TEXT;
+ALTER TABLE photos ADD COLUMN edited_type TEXT;
+ALTER TABLE photos ADD COLUMN edited_size INTEGER;
+ALTER TABLE photos ADD COLUMN edited_width INTEGER;
+ALTER TABLE photos ADD COLUMN edited_height INTEGER;
+ALTER TABLE photos ADD COLUMN edited_updated_at INTEGER;

@@ -40,12 +40,25 @@ export interface Photo {
   /** Signed by the worker — a bare photo id will not fetch a derivative. */
   thumbUrl: string
   previewUrl: string | null
+  /** The original-specific derivatives; thumbUrl/previewUrl prefer an edit. */
+  originalThumbUrl: string
+  originalPreviewUrl: string | null
   /**
    * The uploaded file itself, served inline. The viewer upgrades to this once
    * it has something on screen, so what a client looks at is the real photo and
    * not a 2400px re-encode of it.
    */
   originalUrl: string
+  /** The latest published edit, when one exists. */
+  editedUrl: string | null
+  editedPreviewUrl: string | null
+  editedThumbUrl: string | null
+  editedFilename: string | null
+  editedSize: number | null
+  editedType: string | null
+  editedWidth: number | null
+  editedHeight: number | null
+  editedUpdatedAt: number | null
   hidden?: boolean
   sortOrder?: number
 }
@@ -80,7 +93,10 @@ export const ROOT = ''
  * check against the folder's lock.
  */
 export const mediaUrl = {
-  download: (id: string) => `/download/${id}`,
+  /** Backwards-compatible original route helper. */
+  download: (id: string) => `/download/${id}/original`,
+  downloadOriginal: (id: string) => `/download/${id}/original`,
+  downloadEdited: (id: string) => `/download/${id}/edited`,
 }
 
 /** The route for a folder. '' is the root, which lives at `/`. */

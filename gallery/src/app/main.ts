@@ -233,6 +233,7 @@ async function handleRoute(route: Route): Promise<void> {
 // --------------------------------------------------------------------- boot
 
 async function boot(): Promise<void> {
+  const adminEntry = window.location.pathname.replace(/\/+$/, '') === '/admin'
   // Ask for the folder in the address bar before anything else. The tree call
   // below then rides alongside it instead of queueing in front of it, which on
   // a first load saved a whole round trip of staring at an empty pane.
@@ -265,7 +266,7 @@ async function boot(): Promise<void> {
   startRouter((route) => void handleRoute(route))
 
   // A bookmarked /admin is just a shortcut to the sign-in sheet.
-  if (window.location.pathname.replace(/\/$/, '') === '/admin') {
+  if (adminEntry) {
     go({ folderId: ROOT, photoId: null }, true)
     if (!state.admin) signIn()
   }

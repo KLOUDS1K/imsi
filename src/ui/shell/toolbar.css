@@ -96,7 +96,8 @@
   }
 
   .k-tb__modules .k-seg__btn > span,
-  .k-tb__export .k-btn__label {
+  .k-tb__export .k-btn__label,
+  .k-tb__publish .k-btn__label {
     position: absolute;
     width: 1px;
     height: 1px;

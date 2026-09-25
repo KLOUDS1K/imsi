@@ -32,6 +32,7 @@ import { SORT_LABELS, type ShellState } from './state';
 
 export interface ToolbarActions {
   exit?: { label?: string; onExit(): void };
+  publish?: { label?: string; onPublish(): void | Promise<void> };
   openDrawer(): void;
   openHelp(): void;
   /** Navigate the Library one folder level up. Returns false at the root. */
@@ -211,7 +212,30 @@ export function createAppToolbar(rt: AppRuntime, state: ShellState, actions: Too
   );
   const help = createIconButton({ icon: 'question', label: 'Keyboard shortcuts', shortcut: '?', class: 'k-tb__help', onClick: () => actions.openHelp() });
   const exportBtn = createButton({ label: 'Export', icon: 'export', variant: 'primary', size: 'sm', class: 'k-tb__export', title: 'Export (Shift+⌘E)', onClick: () => ctx.openExportDialog() });
-  d.add(() => [theme, lock, help, exportBtn].forEach((c) => c.destroy()));
+  let publishing = false;
+  const publishBtn = actions.publish
+    ? createButton({
+        label: actions.publish.label ?? 'Save to gallery',
+        icon: 'save',
+        size: 'sm',
+        class: 'k-tb__publish',
+        disabled: !ctx.doc.value,
+        onClick: () => {
+          if (publishing || !ctx.doc.value) return;
+          publishing = true;
+          publishBtn?.setBusy(true);
+          void Promise.resolve(actions.publish?.onPublish())
+            .catch((error: unknown) => ctx.toast(`Could not save: ${error instanceof Error ? error.message : String(error)}`, 'error', 7000))
+            .finally(() => {
+              publishing = false;
+              publishBtn?.setBusy(false);
+              publishBtn?.setDisabled(!ctx.doc.value);
+            });
+        },
+      })
+    : null;
+  d.add(ctx.doc.subscribe((doc) => publishBtn?.setDisabled(!doc || publishing)));
+  d.add(() => [theme, lock, help, publishBtn, exportBtn].forEach((c) => c?.destroy()));
 
   // The drawer button is responsive-only, while a host-provided exit action
   // must remain available at every viewport size.
@@ -231,6 +255,7 @@ export function createAppToolbar(rt: AppRuntime, state: ShellState, actions: Too
       libraryGroup,
       developGroup,
       toolbarGroup(theme.el, lock.el, help.el),
+      ...(publishBtn ? [publishBtn.el] : []),
       exportBtn.el,
     ],
   });

@@ -17,6 +17,7 @@ export { applyOutputSharpening, sharpenParams } from './sharpen';
 export { encodeImage, MIME } from './encode';
 export { buildIccProfile, validateIccProfile } from './icc';
 export { zipResults, downloadBlob } from './zip';
+export { loadExportPresets, saveExportPreset, deleteExportPreset, type ExportPreset } from './presets';
 
 /**
  * Optional extensions an ExportJob may carry (see docs/CONTRACT_CHANGES.md):
@@ -46,6 +47,7 @@ export async function exportPhoto(job: ExportJob & ExportJobExtras): Promise<Exp
   if (s.watermark?.enabled) await applyWatermark(img, s.watermark);
   checkAbort(job.signal);
   const blob = await encodeImage(img, s, job.meta);
+  checkAbort(job.signal);
   const start = Number.isFinite(s.sequenceStart) ? Math.round(s.sequenceStart) : 1;
   const seq = start + job.index;
   const seqWidth = job.batchSize && job.batchSize > 0 ? String(start + job.batchSize - 1).length : undefined;

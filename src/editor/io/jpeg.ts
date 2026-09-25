@@ -145,6 +145,8 @@ export function largestEmbeddedJpeg(b: Uint8Array, opts: { readOrientation?: boo
  * cheaper than a 6 MP "JpgFromRaw".
  */
 export function bestPreviewFor(b: Uint8Array, minLong: number): JpegInfo | null {
+  // No proxy limit means full resolution, not the smallest embedded thumbnail.
+  if (!(minLong > 0)) return largestEmbeddedJpeg(b, { readOrientation: true });
   const all = findEmbeddedJpegs(b, { readOrientation: true });
   let fit: JpegInfo | null = null;
   let largest: JpegInfo | null = null;

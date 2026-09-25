@@ -289,4 +289,46 @@ describe('AutosaveManager', () => {
     expect(saved).toEqual(['x']);
     expect(await auto.getRecovery()).toBeNull();
   });
+
+  it('keeps a failed photo while another photo is pending and retries both', async () => {
+    const db = new MemoryKloudDB();
+    let failA = true;
+    const auto = new AutosaveManager(db, { flushOnHide: false, onError: () => undefined,
+      save: async (id, state) => {
+        if (id === 'a' && failA) throw new Error('disk full');
+        await db.put('edits', id, state);
+      },
+    });
+    auto.schedule('a', editState(1.2));
+    auto.schedule('b', editState(2.4));
+    await expect(auto.flush()).rejects.toThrow('disk full');
+    expect((await db.get<SerializedEditState>('edits', 'b'))?.params.basic.exposure).toBe(2.4);
+    expect(auto.pendingPhotoId).toBe('a');
+    failA = false;
+    await auto.markClean();
+    expect((await db.get<SerializedEditState>('edits', 'a'))?.params.basic.exposure).toBe(1.2);
+    expect(auto.pendingPhotoId).toBeNull();
+    expect(await auto.getRecovery()).toBeNull();
+  });
+
+  it('never restores an older failed write over a newer edit of the same photo', async () => {
+    const db = new MemoryKloudDB();
+    let rejectFirst!: (reason: Error) => void;
+    let calls = 0;
+    const auto = new AutosaveManager(db, { flushOnHide: false,
+      save: async (id, state) => {
+        if (++calls === 1) await new Promise<void>((_, reject) => { rejectFirst = reject; });
+        await db.put('edits', id, state);
+      },
+    });
+    auto.schedule('a', editState(1));
+    const first = auto.flush();
+    const failure = expect(first).rejects.toThrow('temporary failure');
+    await Promise.resolve();
+    auto.schedule('a', editState(3));
+    rejectFirst(new Error('temporary failure'));
+    await failure;
+    await auto.markClean();
+    expect((await db.get<SerializedEditState>('edits', 'a'))?.params.basic.exposure).toBe(3);
+  });
 });

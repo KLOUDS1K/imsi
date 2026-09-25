@@ -7,7 +7,7 @@ import './export.css';
 import type { AppContext } from '../../app/context';
 import { createDefaultParams } from '../../editor/defaults';
 import { outputSize } from '../../editor/engine/geometry';
-import { buildFileName, downloadBlob, exportPhoto, fileExtension, zipResults } from '../../editor/export';
+import { buildFileName, computeExportSize, deleteExportPreset, downloadBlob, exportPhoto, fileExtension, loadExportPresets, saveExportPreset, zipResults, type ExportPreset } from '../../editor/export';
 import { decodeFile } from '../../editor/io';
 import { normalizeParams } from '../../editor/state';
 import type { ExportResult } from '../../editor/contracts';
@@ -20,7 +20,7 @@ import { createSelect, createSlider, createToggle, openDialog } from '../kit';
 const QUICK: { label: string; apply: (s: ExportSettings) => void }[] = [
   { label: 'Web 2048', apply: (s) => Object.assign(s, { format: 'jpeg', quality: 85, bitDepth: 8, colorSpace: 'srgb', resize: { ...s.resize, mode: 'long-edge', value: 2048 } }) },
   { label: 'Instagram', apply: (s) => Object.assign(s, { format: 'jpeg', quality: 90, bitDepth: 8, colorSpace: 'srgb', resize: { ...s.resize, mode: 'dimensions', width: 1080, height: 1350 } }) },
-  { label: 'Full JPEG', apply: (s) => Object.assign(s, { format: 'jpeg', quality: 95, bitDepth: 8, resize: { ...s.resize, mode: 'none' } }) },
+  { label: 'Full JPEG', apply: (s) => Object.assign(s, { format: 'jpeg', quality: 95, bitDepth: 8, colorSpace: 'srgb', resize: { ...s.resize, mode: 'none' } }) },
   { label: 'Print TIFF 16-bit', apply: (s) => Object.assign(s, { format: 'tiff', bitDepth: 16, colorSpace: 'adobe-rgb', dpi: 300, resize: { ...s.resize, mode: 'none' } }) },
   { label: 'Archive DNG', apply: (s) => Object.assign(s, { format: 'dng', bitDepth: 16, resize: { ...s.resize, mode: 'none' } }) },
 ];
@@ -31,13 +31,16 @@ function field(label: string, ...controls: (Node | string | null)[]): HTMLElemen
   return h('label', { class: 'k-exp__field' }, h('span', { class: 'k-exp__label' }, label), h('span', { class: 'k-exp__ctl' }, ...controls));
 }
 
-function numInput(value: number, onChange: (v: number) => void, attrs: Record<string, number> = {}): HTMLInputElement {
+function numInput(value: number, onChange: (v: number) => void, attrs: Record<string, number | string> = {}): HTMLInputElement {
   return h('input', {
     class: 'k-exp__input',
     type: 'number',
     value: String(value),
     attrs,
-    onchange: (e: Event) => onChange(Number((e.target as HTMLInputElement).value)),
+    oninput: (e: Event) => {
+      const input = e.target as HTMLInputElement;
+      if (input.value !== '' && input.validity.valid && Number.isFinite(input.valueAsNumber)) onChange(input.valueAsNumber);
+    },
   });
 }
 
@@ -95,6 +98,20 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
   const d = new Disposer();
   const s: ExportSettings = structuredClone(ctx.exportSettings.value);
   const body = h('div', { class: 'k-exp' });
+  let closed = false;
+  let running: AbortController | null = null;
+  let savedPresets: ExportPreset[] = [];
+  const firstRecord = ctx.library.get(ids[0]);
+  const firstDoc = ctx.doc.value?.photoId === ids[0] ? ctx.doc.value : null;
+  let firstParams = firstDoc?.store.params ?? createDefaultParams(firstRecord?.meta.format === 'raw');
+  const outputSummary = h('p', { class: 'k-exp__summary', attrs: { role: 'status', 'aria-live': 'polite', 'data-testid': 'export-size' } });
+  const progressLabel = h('span', { attrs: { role: 'status', 'aria-live': 'polite' } });
+  const stop = h('button', { type: 'button', class: 'k-exp__chip', onclick: () => {
+    running?.abort();
+    stop.disabled = true;
+    progressLabel.textContent = 'Stopping after the current operation…';
+  } }, 'Stop export');
+  const progress = h('div', { class: 'k-exp__progress', hidden: true }, progressLabel, stop);
   const preview = h('canvas', { class: 'k-exp__preview', width: 480, height: 320 });
   const nameExample = h('span', { class: 'k-exp__example' });
   let previewBg: HTMLCanvasElement | null = null;
@@ -112,10 +129,15 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
     rebuildQueued = true;
     requestAnimationFrame(() => {
       rebuildQueued = false;
+      if (closed) return;
       void renderWatermarkPreview(preview, s.watermark, previewBg);
       const first = ctx.library.get(ids[0]);
-      const meta: PhotoMeta = first?.meta ?? ({ fileName: 'photo', fileSize: 0, mimeType: '', format: 'jpeg', width: 0, height: 0, orientation: 1, bitDepth: 8 } as PhotoMeta);
-      nameExample.textContent = buildFileName(s.fileNameTemplate, { name: (first?.name ?? 'photo').replace(/\.[^.]+$/, ''), seq: s.sequenceStart, meta, width: meta.width, height: meta.height }, fileExtension(s.format));
+      const meta: PhotoMeta = firstDoc?.meta ?? first?.meta ?? ({ fileName: 'photo', fileSize: 0, mimeType: '', format: 'jpeg', width: 0, height: 0, orientation: 1, bitDepth: 8 } as PhotoMeta);
+      const full = outputSize(firstParams, meta.width || 1, meta.height || 1);
+      const size = computeExportSize(full.width, full.height, s.resize);
+      const depth = s.format === 'jpeg' || s.format === 'webp' ? 8 : s.format === 'dng' ? 16 : s.bitDepth;
+      outputSummary.textContent = `${size.width} × ${size.height} px · ${(size.width * size.height / 1e6).toFixed(2)} MP · ${depth}-bit${ids.length > 1 ? ' · First photo; sizes may vary' : ''}`;
+      nameExample.textContent = buildFileName(s.fileNameTemplate, { name: (first?.name ?? 'photo').replace(/\.[^.]+$/, ''), seq: s.sequenceStart, meta, ...size, rating: first?.rating, seqWidth: String(s.sequenceStart + ids.length - 1).length }, fileExtension(s.format));
     });
   };
 
@@ -124,6 +146,16 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
     body.replaceChildren();
     const quick = h('div', { class: 'k-exp__quick' });
     for (const q of QUICK) quick.append(h('button', { type: 'button', class: 'k-exp__chip', onclick: () => (q.apply(s), build()) }, q.label));
+    const custom = h('div', { class: 'k-exp__quick' });
+    for (const preset of savedPresets) {
+      custom.append(h('span', { class: 'k-exp__recipe' },
+        h('button', { type: 'button', class: 'k-exp__chip', onclick: () => {
+          Object.assign(s, structuredClone(preset.settings));
+          build();
+        }, attrs: { 'aria-label': `Apply export preset ${preset.name}` } }, preset.name),
+        h('button', { type: 'button', class: 'k-exp__chip', onclick: () => void removePreset(preset.name), attrs: { 'aria-label': `Delete export preset ${preset.name}` } }, '×')));
+    }
+    custom.append(h('button', { type: 'button', class: 'k-exp__chip', onclick: () => void savePreset() }, 'Save preset…'));
 
     const fmt = createSelect<ExportSettings['format']>({
       ariaLabel: 'Format',
@@ -145,13 +177,13 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
     const depth = createSelect<'8' | '16'>({
       ariaLabel: 'Bit depth',
       size: 'sm',
-      value: String(s.bitDepth) as '8' | '16',
+      value: String(s.format === 'dng' ? 16 : s.format === 'jpeg' || s.format === 'webp' ? 8 : s.bitDepth) as '8' | '16',
       disabled: s.format === 'jpeg' || s.format === 'webp' || s.format === 'dng',
       options: [
         { value: '8', label: '8-bit' },
         { value: '16', label: '16-bit' },
       ],
-      onChange: (v) => (s.bitDepth = Number(v) as 8 | 16),
+      onChange: (v) => ((s.bitDepth = Number(v) as 8 | 16), refresh()),
     });
     const mode = createSelect<ExportSettings['resize']['mode']>({
       ariaLabel: 'Resize',
@@ -175,9 +207,13 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
       s.resize.mode === 'none'
         ? null
         : s.resize.mode === 'dimensions'
-          ? h('span', { class: 'k-exp__pair' }, numInput(s.resize.width, (v) => (s.resize.width = v), { min: 16 }), '×', numInput(s.resize.height, (v) => (s.resize.height = v), { min: 16 }))
-          : numInput(s.resize.value, (v) => (s.resize.value = v), { min: 1 });
-    const enlarge = createToggle({ checked: s.resize.dontEnlarge, label: "Don't enlarge", size: 'sm', onChange: (v) => (s.resize.dontEnlarge = v) });
+          ? h('span', { class: 'k-exp__pair' }, numInput(s.resize.width, (v) => ((s.resize.width = v), refresh()), { min: 1, 'aria-label': 'Export width' }), '×', numInput(s.resize.height, (v) => ((s.resize.height = v), refresh()), { min: 1, 'aria-label': 'Export height' }))
+          : s.resize.mode === 'width'
+            ? numInput(s.resize.width, (v) => ((s.resize.width = v), refresh()), { min: 1, 'aria-label': 'Export width' })
+            : s.resize.mode === 'height'
+              ? numInput(s.resize.height, (v) => ((s.resize.height = v), refresh()), { min: 1, 'aria-label': 'Export height' })
+              : numInput(s.resize.value, (v) => ((s.resize.value = v), refresh()), { min: s.resize.mode === 'megapixels' ? 0.01 : 1, step: s.resize.mode === 'megapixels' ? 0.01 : 1, 'aria-label': s.resize.mode === 'megapixels' ? 'Export megapixels' : 'Export edge length' });
+    const enlarge = createToggle({ checked: s.resize.dontEnlarge, label: "Don't enlarge", size: 'sm', onChange: (v) => ((s.resize.dontEnlarge = v), refresh()) });
     const space = createSelect<ExportSettings['colorSpace']>({
       ariaLabel: 'Colour space',
       size: 'sm',
@@ -292,6 +328,7 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
       h('div', { class: 'k-exp__col' },
         h('div', { class: 'k-label' }, 'Presets'),
         quick,
+        custom,
         h('div', { class: 'k-label' }, 'File'),
         field('Format', fmt.el),
         s.format === 'jpeg' || s.format === 'webp' ? quality.el : null,
@@ -299,6 +336,8 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
         h('div', { class: 'k-label' }, 'Size'),
         field('Resize', mode.el, sizeCtl),
         s.resize.mode !== 'none' ? enlarge.el : null,
+        outputSummary,
+        s.resize.mode === 'dimensions' ? h('p', { class: 'k-exp__hint' }, 'Fits inside these dimensions without cropping. Set the crop ratio in Develop for an exact aspect ratio.') : null,
         field('Resolution', numInput(s.dpi, (v) => (s.dpi = v), { min: 72, max: 1200 }), 'ppi'),
         field('Colour space', space.el),
         h('div', { class: 'k-label' }, 'Metadata'),
@@ -310,6 +349,7 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
         h('div', { class: 'k-exp__row' }, sharpOn.el, sharpTarget.el, sharpAmount.el),
         h('div', { class: 'k-label' }, 'File name'),
         field('Template', textInput(s.fileNameTemplate, (v) => ((s.fileNameTemplate = v), refresh()), '{name}_kloud')),
+        field('Start number', numInput(s.sequenceStart, (v) => ((s.sequenceStart = v), refresh()), { min: 1, 'aria-label': 'Sequence start' })),
         h('p', { class: 'k-exp__hint' }, 'Tokens: {name} {seq} {date} {camera} {lens} {iso} {rating} {width} {height}'),
         field('Example', nameExample),
       ),
@@ -332,7 +372,7 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
 
   const dialog = openDialog<'export' | 'cancel'>({
     title: ids.length > 1 ? `Export ${ids.length} photos` : 'Export photo',
-    content: body,
+    content: h('div', {}, body, progress),
     size: 'xl',
     class: 'k-exp-dialog',
     actions: [
@@ -348,38 +388,78 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
         },
       },
     ],
-    onClose: () => d.dispose(),
+    onClose: () => {
+      closed = true;
+      running?.abort();
+      d.dispose();
+    },
   });
 
-  let running: AbortController | null = null;
+  void loadExportPresets(ctx.db).then((presets) => {
+    savedPresets = presets;
+    if (!closed && !running) build();
+  }).catch(() => ctx.toast('Saved export presets could not be loaded.', 'error'));
+  if (!firstDoc && firstRecord) void ctx.library.loadEdit(ids[0]).then((saved) => {
+    if (saved) firstParams = normalizeParams(saved.params, firstRecord.meta.format === 'raw');
+    refresh();
+  }).catch(() => undefined);
+
+  async function savePreset(): Promise<void> {
+    const name = await ctx.prompt({ title: 'Save export preset', label: 'Preset name', placeholder: 'e.g. KLOUD Instagram', confirmLabel: 'Save' });
+    if (!name?.trim() || closed) return;
+    const clean = name.trim().slice(0, 80);
+    if (savedPresets.some((p) => p.name.toLowerCase() === clean.toLowerCase())
+      && !await ctx.confirm({ title: `Replace “${clean}”?`, message: 'Save the current export settings under this name.', confirmLabel: 'Replace' })) return;
+    try {
+      savedPresets = await saveExportPreset(ctx.db, clean, s);
+      if (!closed) build();
+      ctx.toast(`Saved export preset “${clean}”.`, 'success');
+    } catch (e) { ctx.toast(`Could not save preset: ${(e as Error).message}`, 'error'); }
+  }
+
+  async function removePreset(name: string): Promise<void> {
+    if (!await ctx.confirm({ title: `Delete export preset “${name}”?`, confirmLabel: 'Delete', danger: true })) return;
+    try {
+      savedPresets = await deleteExportPreset(ctx.db, name);
+      if (!closed) build();
+    } catch (e) { ctx.toast(`Could not delete preset: ${(e as Error).message}`, 'error'); }
+  }
+
   async function run(): Promise<void> {
     if (running) return;
     const engine = ctx.engine;
     if (!engine) return;
-    ctx.exportSettings.set(structuredClone(s));
-    running = new AbortController();
+    const settings = structuredClone(s);
+    ctx.exportSettings.set(structuredClone(settings));
+    const controller = new AbortController();
+    running = controller;
     dialog.setBusy(true);
+    body.inert = true;
+    progress.hidden = false;
+    stop.disabled = false;
+    stop.focus();
     const results: ExportResult[] = [];
     const errors: string[] = [];
     try {
       for (const [index, id] of ids.entries()) {
-        if (running.signal.aborted) break;
+        if (controller.signal.aborted) break;
         const rec = ctx.library.get(id);
         if (!rec) continue;
         ctx.busy.set({ active: true, label: `Exporting ${index + 1}/${ids.length}`, progress: index / ids.length });
+        progressLabel.textContent = `Exporting ${index + 1} of ${ids.length} · ${rec.name}`;
         try {
           const doc = ctx.doc.value;
           let params: EditParams;
           let source: SourceImage;
           let meta: PhotoMeta;
           if (doc && doc.photoId === id) {
-            params = doc.store.params;
+            params = structuredClone(doc.store.params);
             source = await doc.decoded.loadFull();
             meta = doc.meta;
           } else {
             const file = await ctx.library.getFile(id);
             if (!file) throw new Error('original file is missing');
-            const decoded = await decodeFile(file, rec.name);
+            const decoded = await decodeFile(file, rec.name, { signal: controller.signal });
             source = decoded.source;
             meta = decoded.meta;
             const saved = await ctx.library.loadEdit(id);
@@ -389,14 +469,14 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
           const res = await exportPhoto({
             params,
             meta,
-            settings: s,
+            settings,
             baseName: rec.name.replace(/\.[^.]+$/, ''),
             index,
             batchSize: ids.length,
             rating: rec.rating,
             fullOutputSize: full,
-            signal: running.signal,
-            render: (width, height, bitDepth, colorSpace) => engine.renderFull(params, { width, height, bitDepth, colorSpace, source, signal: running?.signal }),
+            signal: controller.signal,
+            render: (width, height, bitDepth, colorSpace) => engine.renderFull(params, { width, height, bitDepth, colorSpace, source, signal: controller.signal }),
           });
           results.push(res);
         } catch (e) {
@@ -404,19 +484,34 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
           errors.push(`${rec.name}: ${(e as Error).message}`);
         }
       }
+      if (controller.signal.aborted) {
+        ctx.toast('Export stopped. No files were downloaded.', 'info');
+        return;
+      }
       if (results.length === 1) downloadBlob(results[0].blob, results[0].fileName);
       else if (results.length > 1) {
+        progressLabel.textContent = 'Preparing ZIP download…';
         const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-        downloadBlob(await zipResults(results), `KLOUD_export_${stamp}.zip`);
+        const archive = await zipResults(results);
+        if (controller.signal.aborted) {
+          ctx.toast('Export stopped. No files were downloaded.', 'info');
+          return;
+        }
+        downloadBlob(archive, `KLOUD_export_${stamp}.zip`);
       }
       if (errors.length) ctx.toast(`Exported ${results.length}, failed ${errors.length}: ${errors[0]}`, 'error', 8000);
       else if (results.length) ctx.toast(`Exported ${results.length} photo${results.length === 1 ? '' : 's'}.`, 'success');
-      dialog.close('export');
+      if (results.length) dialog.close('export');
       if (results.length && isFramed()) showFramedResult(results);
+    } catch (e) {
+      ctx.toast(`Export failed: ${(e as Error).message}`, 'error', 8000);
     } finally {
       ctx.busy.set({ active: false });
       dialog.setBusy(false);
       running = null;
+      body.inert = false;
+      progress.hidden = true;
+      if (!closed) dialog.el.querySelector<HTMLButtonElement>('.k-dialog__foot .k-btn--primary')?.focus();
     }
   }
 }

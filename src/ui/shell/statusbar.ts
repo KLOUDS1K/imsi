@@ -78,8 +78,11 @@ export function createAppStatusBar(rt: AppRuntime): AppStatusBar {
       const ids = ctx.visibleIds.value;
       const i = ids.indexOf(doc.photoId);
       const dims = `${doc.meta.width}×${doc.meta.height}`;
-      count.textContent = `${doc.record.name} · ${dims}${i >= 0 ? ` · ${i + 1} of ${ids.length}` : ''}`;
+      const previewOnly = doc.meta.exif?.__kloudFallback === 'embedded-preview';
+      count.textContent = `${doc.record.name} · ${dims}${previewOnly ? ' · RAW JPEG preview' : ''}${i >= 0 ? ` · ${i + 1} of ${ids.length}` : ''}`;
+      count.title = previewOnly ? 'Editing the embedded JPEG preview. RAW sensor data was not decoded; export is limited to the embedded preview resolution.' : '';
     } else {
+      count.title = '';
       const sel = ctx.selection.value.length;
       const shown = ctx.visibleIds.value.length;
       const base = shown !== total ? `${shown} of ${total} photos` : `${total} ${total === 1 ? 'photo' : 'photos'}`;

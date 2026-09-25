@@ -13,7 +13,7 @@ import { newSourceId, throwIfAborted } from './binary';
 import { canvasToBlob, createCanvas, context2d, drawToPixels, encodePixels, fitSize } from './canvas';
 import { normalizeCameraName } from './camera-names';
 import { detectFormat } from './formats';
-import { bestPreviewFor } from './jpeg';
+import { bestPreviewFor, largestEmbeddedJpeg } from './jpeg';
 import { metaFromTags, readMetadata } from './metadata';
 import { applyOrientation, downscale, rgbToRgba16, toSrgb8 } from './pixels';
 import { decodePng, readPngHeader } from './png';
@@ -46,14 +46,25 @@ async function decodeEmbeddedPreview(bytes: Uint8Array, maxSize: number | undefi
   const blob = new Blob([bytes.slice(jpg.offset, jpg.end)], { type: 'image/jpeg' });
   const loaded = await decodeBrowser(blob, maxSize);
   // Preview streams rarely carry their own orientation; use the container's.
-  if (!jpg.orientation && orientation > 1) loaded.px = applyOrientation(loaded.px, orientation);
-  loaded.fullW = loaded.px.width;
-  loaded.fullH = loaded.px.height;
+  if (!jpg.orientation && orientation > 1) {
+    loaded.px = applyOrientation(loaded.px, orientation);
+    if (orientation >= 5 && orientation <= 8) [loaded.fullW, loaded.fullH] = [loaded.fullH, loaded.fullW];
+  }
+  const largest = largestEmbeddedJpeg(bytes, { readOrientation: true }) ?? jpg;
+  const fullOrientation = largest.orientation ?? orientation;
+  loaded.fullW = fullOrientation >= 5 && fullOrientation <= 8 ? largest.height : largest.width;
+  loaded.fullH = fullOrientation >= 5 && fullOrientation <= 8 ? largest.width : largest.height;
+  // Keep the JPEG's native dimensions. Replacing them with the proxy dimensions
+  // makes decodeFile believe it already has the full image and skip loadFull().
   return loaded;
 }
 
 async function decodeRaw(bytes: Uint8Array, maxSize: number | undefined, meta: PhotoMeta, opts: DecodeOptions): Promise<Loaded> {
-  if (opts.preferEmbeddedPreview) return decodeEmbeddedPreview(bytes, maxSize, meta.orientation);
+  if (opts.preferEmbeddedPreview) {
+    const loaded = await decodeEmbeddedPreview(bytes, maxSize, meta.orientation);
+    meta.exif = { ...(meta.exif ?? {}), __kloudFallback: 'embedded-preview' };
+    return { ...loaded, isRaw: true };
+  }
   const raw = new LibRaw();
   try {
     opts.onProgress?.(0.1, 'Decoding RAW');
@@ -91,6 +102,7 @@ async function decodeRaw(bytes: Uint8Array, maxSize: number | undefined, meta: P
     px = downscale(px, maxSize ?? 0);
     return { px, bitDepth: 16, primaries: 'srgb', isRaw: true, fullW, fullH };
   } catch (err) {
+    throwIfAborted(opts.signal);
     console.warn('[io] LibRaw decode failed, using the embedded preview', err);
     const loaded = await decodeEmbeddedPreview(bytes, maxSize, meta.orientation);
     meta.exif = { ...(meta.exif ?? {}), __kloudFallback: 'embedded-preview' };

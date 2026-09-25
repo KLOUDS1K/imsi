@@ -1,0 +1,1139 @@
+/* The window: chrome, sidebar, and the folder pane. */
+
+.app {
+  display: grid;
+  grid-template-rows: var(--chrome-h) minmax(0, 1fr) var(--status-h);
+  height: 100dvh;
+}
+
+/* ------------------------------------------------------------------- chrome */
+
+.chrome {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-blur);
+  backdrop-filter: blur(18px) saturate(1.5);
+  min-width: 0;
+}
+
+.chrome__history {
+  display: flex;
+  gap: 1px;
+  flex: none;
+}
+
+.chrome__tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  margin-left: auto;
+}
+
+.chrome__drawer {
+  display: none;
+}
+
+/* --------------------------------------------------------------- breadcrumb */
+
+/*
+ * The path scrolls, and after every render it is scrolled to the end so the
+ * folder you are actually in stays visible on a narrow screen. The fade
+ * therefore has to move to whichever edge is overflowing.
+ */
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent 100%);
+}
+.crumbs.is-scrolled {
+  mask-image: linear-gradient(90deg, transparent 0, #000 20px, #000 100%);
+}
+.crumbs::-webkit-scrollbar {
+  display: none;
+}
+
+.crumb {
+  flex: none;
+  padding: 5px 9px;
+  border-radius: var(--r-xs);
+  font-size: 13px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
+}
+.crumb:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.crumb--current {
+  color: var(--ink);
+  font-weight: 550;
+}
+.crumb__sep {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  color: var(--ink-3);
+  opacity: 0.6;
+}
+
+/* ------------------------------------------------------------------- search */
+
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: clamp(140px, 20vw, 236px);
+}
+.search__icon {
+  position: absolute;
+  left: 9px;
+  width: 14px;
+  height: 14px;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+.search__input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px 0 29px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: var(--hover);
+  font-size: 13px;
+  transition: border-color 0.14s var(--ease), background 0.14s var(--ease);
+}
+.search__input::placeholder {
+  color: var(--ink-3);
+}
+.search__input:focus {
+  outline: none;
+  background: var(--bg-elev);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.search__input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+/* -------------------------------------------------------------- view toggle */
+
+.seg {
+  display: flex;
+  gap: 1px;
+  padding: 2px;
+  border-radius: var(--r-sm);
+  background: var(--hover);
+}
+.seg__btn {
+  width: 27px;
+  height: 26px;
+  padding: 5px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
+}
+.seg__btn:hover {
+  color: var(--ink);
+}
+.seg__btn.is-active {
+  background: var(--bg-elev);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+}
+
+/* --------------------------------------------------------------------- body */
+
+.body {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  min-height: 0;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px 10px 10px;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+  overflow-y: auto;
+}
+
+.wordmark {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 2px 8px 16px;
+  font-family: var(--font-display);
+  font-stretch: var(--display-stretch);
+  line-height: 1;
+}
+.wordmark__k {
+  font-size: 19.5px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.wordmark__rest {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.185em;
+  color: var(--ink-3);
+}
+
+.sidebar__foot {
+  margin-top: auto;
+  padding: 12px 9px 2px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------- tree */
+
+.tree__row {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.tree__twisty {
+  width: 18px;
+  height: 26px;
+  flex: none;
+  padding: 6px 3px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: transform 0.16s var(--ease), color 0.14s var(--ease);
+}
+.tree__twisty.is-empty {
+  cursor: default;
+  pointer-events: none;
+}
+.tree__twisty[aria-expanded='true'] {
+  transform: rotate(90deg);
+}
+.tree__twisty:hover {
+  color: var(--ink);
+}
+
+.tree__link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px 5px calc(8px + var(--depth, 0) * 13px);
+  border-radius: var(--r-xs);
+  color: var(--ink-2);
+  font-size: 13px;
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
+}
+.tree__link--root {
+  margin-left: 18px;
+}
+.tree__link:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.tree__link.is-current {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 550;
+}
+.tree__link.is-drop-target {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.tree__icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  opacity: 0.75;
+}
+.tree__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tree__empty {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* --------------------------------------------------------------------- pane */
+
+.pane {
+  min-height: 0;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+/*
+ * No max-width: the pane is a file browser, so it uses the window it is given.
+ * Prose inside it is capped separately (.pane__note), which is the part that
+ * actually suffers from long lines.
+ */
+.pane__inner {
+  padding: 26px clamp(18px, 2.6vw, 48px) 64px;
+}
+
+.pane__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding-bottom: 20px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.pane__titles {
+  min-width: 0;
+}
+.pane__title {
+  font-size: clamp(23px, 2.8vw, 30px);
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.025em;
+  word-break: keep-all;
+}
+.pane__note {
+  margin-top: 6px;
+  max-width: 62ch;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.pane__note:empty {
+  display: none;
+}
+.pane__actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+/* ------------------------------------------------------------------ section */
+
+.section + .section {
+  margin-top: 38px;
+}
+.section__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.section__count {
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--hover);
+  font-size: 11px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.grid {
+  display: grid;
+  gap: 22px 18px;
+}
+.grid--folders {
+  grid-template-columns: repeat(auto-fill, minmax(166px, 1fr));
+}
+.grid--photos {
+  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+  gap: 20px 16px;
+}
+
+/* --------------------------------------------------------------- folder card */
+
+.card {
+  position: relative;
+}
+.card__link {
+  display: block;
+  border-radius: var(--r);
+}
+
+/*
+ * The folder icon: tab, back panel, the photos standing in it, then the
+ * brighter front panel across their lower half.
+ *
+ * The prints are all the same size and sit directly behind one another, each
+ * a little higher than the last, so the ones behind read as the edges of a
+ * stack rather than as separate pictures. Their box is 3:2 — wide enough that
+ * the bottom of the stack still ends inside the folder even when the pointer
+ * lifts it, which is why nothing here needs clipping.
+ *
+ *   0%    tab
+ *  12%    back panel top
+ *  12%    fifth sheet        ← all five are the same size, 2% apart
+ *  14%    fourth sheet
+ *  16%    third sheet
+ *  18%    second sheet
+ *  20%    first print        ← the one you actually look at
+ *  35%    front panel top    ← a tall front, the way a real folder sits
+ * 100%    bottom
+ *
+ * The box is 6:5 rather than 4:3: a tab, a tall front and a readable photo
+ * will not all fit in a wider one without the photo becoming a slit.
+ */
+.folder {
+  position: relative;
+  display: block;
+  aspect-ratio: 6 / 5;
+  /* Everything drawn on the folder is sized in cqw, so the icon keeps its
+     proportions at every grid width instead of the label swelling as the tile
+     shrinks. */
+  container-type: inline-size;
+  transition: transform 0.26s var(--ease), filter 0.26s var(--ease);
+}
+
+.folder__back {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  top: 12%;
+  bottom: 0;
+  border-radius: 6% / 8%;
+  background: var(--folder-back);
+}
+
+/*
+ * The tab, in two pieces.
+ *
+ * It has to be two: clip-path is applied after border-radius and simply cuts
+ * the rounded corner off, so one element can have the slope or the rounded
+ * left edge, never both. ::before is the flat top with a genuinely round
+ * top-left; ::after is the wedge carrying it down into the body.
+ *
+ * Both overlap the panel below them so the join never shows a seam. The corner
+ * radius is 13%/53% rather than one number because the tab is about four times
+ * wider than it is tall — equal percentages would draw an oval.
+ */
+.folder__back::before {
+  content: '';
+  position: absolute;
+  left: 3%;
+  top: -8.5%;
+  width: 32%;
+  height: 10%;
+  background: var(--folder-back);
+  border-radius: 13% 0 0 0 / 53% 0 0 0;
+}
+.folder__back::after {
+  content: '';
+  position: absolute;
+  left: 34.5%;
+  top: -8.5%;
+  width: 13%;
+  height: 10%;
+  background: var(--folder-back);
+  clip-path: polygon(0 0, 26% 0, 66% 52%, 100% 100%, 0 100%);
+}
+
+.folder__print {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 3.5%;
+  background: var(--bg-elev);
+  box-shadow: 0 3px 9px rgba(40, 26, 0, 0.26);
+  transition: transform 0.36s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.folder__print img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/*
+ * Slots are classes, not :nth-of-type — every child of .folder is a span, so
+ * type counting would start at the back panel and leave the third print with
+ * no rule at all, stretched across the whole icon.
+ */
+/* One size for all of them; only the height in the stack changes. */
+.folder__print {
+  left: 3.5%;
+  width: 93%;
+  aspect-ratio: 3 / 2;
+}
+/* The one you actually look at. */
+.folder__print--a {
+  top: 20%;
+  z-index: 5;
+}
+/* Behind it, each a step higher, showing as the edge of a stack. */
+.folder__print--b {
+  top: 18%;
+  z-index: 4;
+}
+.folder__print--c {
+  top: 16%;
+  z-index: 3;
+}
+.folder__print--d {
+  top: 14%;
+  z-index: 2;
+}
+.folder__print--e {
+  top: 12%;
+  z-index: 1;
+}
+
+/* Pointer on the card and they rise out of the folder. */
+.card:hover .folder__print--a,
+.card.is-tilting .folder__print--a {
+  transform: translateY(-4%);
+}
+.card:hover .folder__print--b,
+.card.is-tilting .folder__print--b {
+  transform: translateY(-7%);
+}
+.card:hover .folder__print--c,
+.card.is-tilting .folder__print--c {
+  transform: translateY(-10%);
+}
+.card:hover .folder__print--d,
+.card.is-tilting .folder__print--d {
+  transform: translateY(-13%);
+}
+.card:hover .folder__print--e,
+.card.is-tilting .folder__print--e {
+  transform: translateY(-16%);
+}
+
+.folder__front {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 35%;
+  bottom: 0;
+  z-index: 10;
+  border-radius: 6% / 12%;
+  background: linear-gradient(168deg, var(--folder-front-1), var(--folder-front-2));
+  box-shadow: 0 1px 0 var(--folder-rim) inset, 0 5px 14px -8px var(--folder-edge);
+}
+
+.folder__glyph {
+  position: absolute;
+  left: 50%;
+  top: 67%;
+  translate: -50% -50%;
+  z-index: 12;
+  width: 16%;
+  height: 16%;
+  color: var(--folder-ink);
+}
+
+/* The date, written on the front of the folder. */
+.folder__date {
+  position: absolute;
+  left: 6%;
+  bottom: 7%;
+  z-index: 12;
+  padding: clamp(1px, 1.1cqw, 3px) clamp(4px, 3.4cqw, 9px);
+  border-radius: clamp(3px, 2.6cqw, 6px);
+  background: rgba(255, 255, 255, 0.4);
+  font-size: clamp(8.5px, 5.8cqw, 12px);
+  font-weight: 550;
+  color: var(--folder-ink);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.card:hover .folder {
+  filter: drop-shadow(0 10px 20px rgba(40, 26, 0, 0.16));
+}
+.card.is-drop-target .folder__front {
+  box-shadow: 0 0 0 2px var(--accent), 0 5px 14px -8px var(--folder-edge);
+}
+
+.card__meta {
+  display: block;
+  margin-top: 11px;
+}
+.card__name {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 550;
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Reserve the line even before the counts arrive, so nothing jumps. */
+.card__sub:empty::before {
+  content: '\00a0';
+}
+.card__sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.card .more-btn {
+  top: 6px;
+}
+.tile .more-btn {
+  z-index: 2;
+}
+
+
+/* ---------------------------------------------------------------- photo tile */
+
+.tile {
+  position: relative;
+}
+.tile__frame {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background-color: var(--bg-elev);
+  background-size: cover;
+  background-position: center;
+  transition: transform 0.24s var(--ease), box-shadow 0.24s var(--ease),
+    border-color 0.24s var(--ease);
+}
+.tile__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.4s var(--ease), transform 0.5s var(--ease);
+}
+.tile__img.is-loaded {
+  opacity: 1;
+}
+.tile__hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+.tile:hover .tile__frame {
+  transform: translateY(-3px);
+  border-color: transparent;
+  box-shadow: var(--shadow-2);
+}
+.tile:hover .tile__img {
+  transform: scale(1.05);
+}
+
+.tile__frame--fallback {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  background: linear-gradient(150deg, var(--hover), transparent 65%), var(--bg-elev);
+}
+.tile__glyph {
+  width: 26px;
+  height: 26px;
+  color: var(--ink-3);
+}
+.tile__ext {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+}
+
+.tile__meta {
+  display: block;
+  margin-top: 9px;
+}
+.tile__name {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile__sub {
+  display: block;
+  margin-top: 1px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tile__dl {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-blur);
+  backdrop-filter: blur(12px);
+  color: var(--ink);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.16s var(--ease), transform 0.16s var(--ease), background 0.14s var(--ease),
+    color 0.14s var(--ease), border-color 0.14s var(--ease);
+}
+.tile:hover .tile__dl,
+.tile__dl:focus-visible {
+  opacity: 1;
+  transform: none;
+}
+.tile__dl:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+}
+
+/* ---------------------------------------------------------------- list view */
+
+.list {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+  background: var(--bg-elev);
+}
+.list__head,
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px 78px 116px 116px;
+  align-items: center;
+  gap: 14px;
+  padding: 0 14px;
+}
+.list__head {
+  height: 36px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.row {
+  height: 46px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.12s var(--ease);
+}
+.row:last-child {
+  border-bottom: 0;
+}
+.row:hover {
+  background: var(--hover);
+}
+.row.is-drop-target {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.list__cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.list__cell--name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.row__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 450;
+}
+.row__icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--ink-3);
+}
+.row__icon--folder {
+  color: var(--accent);
+  opacity: 0.9;
+}
+.row__thumb {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  overflow: hidden;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.row__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ------------------------------------------------------------ empty & state */
+
+.state {
+  padding: 40px 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  padding: clamp(48px, 12vh, 96px) 24px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-lg);
+  text-align: center;
+}
+.empty__glyph {
+  width: 38px;
+  height: 38px;
+  color: var(--ink-3);
+  opacity: 0.55;
+}
+.empty__title {
+  font-size: 15px;
+  font-weight: 550;
+}
+.empty__hint {
+  max-width: 46ch;
+  font-size: 13px;
+  color: var(--ink-3);
+  line-height: 1.6;
+}
+.empty__hint:empty {
+  display: none;
+}
+.empty__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+/* ---------------------------------------------------------------- statusbar */
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------------- dropzone */
+
+.dropzone {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(3px);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.14s var(--ease);
+}
+.dropzone.is-over {
+  opacity: 1;
+}
+.dropzone__card {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 40px 56px;
+  border: 2px dashed var(--accent);
+  border-radius: var(--r-xl);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-2);
+  text-align: center;
+}
+.dropzone__card > [data-icon] {
+  width: 30px;
+  height: 30px;
+  color: var(--accent);
+}
+.dropzone__title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.dropzone__where {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.scrim {
+  display: none;
+}
+html.is-drawer-open .scrim {
+  display: block;
+}
+
+/* -------------------------------------------------------------- responsive */
+
+/*
+ * Wide displays get bigger tiles rather than more of them: at 2560px a 158px
+ * grid would be fifteen columns of postage stamps.
+ */
+@media (min-width: 1700px) {
+  .grid--folders {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  }
+  .grid--photos {
+    grid-template-columns: repeat(auto-fill, minmax(182px, 1fr));
+  }
+}
+
+@media (min-width: 2300px) {
+  :root {
+    --sidebar-w: 290px;
+  }
+  .grid--folders {
+    grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
+  }
+  .grid--photos {
+    grid-template-columns: repeat(auto-fill, minmax(206px, 1fr));
+  }
+  .pane__inner {
+    padding-top: 32px;
+  }
+}
+
+@media (max-width: 1100px) {
+  :root {
+    --sidebar-w: 216px;
+  }
+  .list__head,
+  .row {
+    grid-template-columns: minmax(0, 1fr) 88px 74px 112px;
+  }
+  .list__cell:nth-child(5),
+  .list__head .list__cell:nth-child(5) {
+    display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .chrome__drawer {
+    display: grid;
+  }
+  .sidebar {
+    position: fixed;
+    z-index: 60;
+    top: var(--chrome-h);
+    bottom: 0;
+    left: 0;
+    width: min(300px, 82vw);
+    transform: translateX(-102%);
+    transition: transform 0.24s var(--ease);
+    box-shadow: var(--shadow-2);
+  }
+  html.is-drawer-open .sidebar {
+    transform: none;
+  }
+  .scrim {
+    position: fixed;
+    inset: var(--chrome-h) 0 0 0;
+    z-index: 55;
+    background: rgba(10, 10, 12, 0.4);
+  }
+  .search {
+    width: 150px;
+  }
+  .list__head,
+  .row {
+    grid-template-columns: minmax(0, 1fr) 84px;
+  }
+  .list__cell:nth-child(3),
+  .list__cell:nth-child(4) {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .chrome {
+    gap: 6px;
+    padding: 0 8px;
+  }
+  .chrome__history [data-nav='forward'] {
+    display: none;
+  }
+  .seg,
+  [data-role='sort'] {
+    display: none;
+  }
+  .search {
+    width: 116px;
+  }
+  .grid--folders {
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 18px 14px;
+  }
+  .grid--photos {
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 16px 12px;
+  }
+  .pane__inner {
+    padding: 20px 16px 56px;
+  }
+  .tile__dl {
+    opacity: 1;
+    transform: none;
+    width: 28px;
+    height: 28px;
+  }
+  .more-btn {
+    opacity: 1;
+    transform: none;
+  }
+  .toasts {
+    left: 12px;
+    right: 12px;
+    bottom: calc(var(--status-h) + 20px);
+  }
+}
+
+/* ------------------------------------------------------------------- locks */
+
+/*
+ * A locked folder is drawn as a closed door, not as an absence: the name is
+ * still there, so a visitor knows what they are being asked the password for.
+ */
+/* A locked folder is drawn shut: no prints in it, a hatched front, a padlock. */
+/*
+ * A locked folder is stamped, not hatched: the padlock is pressed into the
+ * front panel. Darker ink for the groove plus one light edge below it — light
+ * comes from above, so the lower wall of an indentation is what catches it.
+ * The same two rules inverted would read as embossed instead.
+ */
+.folder__glyph {
+  color: var(--folder-deboss);
+  /* Two edges make the groove: a lit lower lip, and a darker upper one where
+     the surface falls away from the light. */
+  filter: drop-shadow(0 1.5px 0 var(--folder-deboss-lip))
+    drop-shadow(0 -0.5px 0 var(--folder-deboss));
+}
+.folder--locked .folder__glyph {
+  width: 26%;
+  height: 26%;
+}
+/* The owner's version: same stamp, tucked into the corner of the front. */
+.folder__glyph--badge {
+  left: auto;
+  right: 7%;
+  top: auto;
+  bottom: 7%;
+  translate: none;
+  width: 13%;
+  height: 13%;
+}
+
+.card__lock {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  vertical-align: -1px;
+  color: var(--accent);
+}
+.row__icon--locked {
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+.lockbox {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: clamp(40px, 9vh, 76px) 28px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-lg);
+  text-align: center;
+}
+.lockbox__glyph {
+  width: 34px;
+  height: 34px;
+  color: var(--accent);
+}
+.lockbox__title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  word-break: keep-all;
+}
+.lockbox__hint {
+  max-width: 40ch;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+.lockbox__form {
+  display: flex;
+  gap: 8px;
+  width: min(320px, 100%);
+  margin-top: 6px;
+}
+.lockbox__form .input {
+  flex: 1;
+  min-width: 0;
+}
+.lockbox__error {
+  margin: 0;
+  padding: 7px 12px;
+  border-radius: var(--r-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12.5px;
+}

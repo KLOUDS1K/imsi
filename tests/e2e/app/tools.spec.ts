@@ -62,7 +62,7 @@ test.describe.serial('KLOUD Studio tools', () => {
     page.on('console', (m) => {
       if (m.type() === 'error' && !IGNORED_CONSOLE.test(m.text())) errors.push(`console: ${m.text()}`);
     });
-    await page.goto('/');
+    await page.goto('/studio');
     await page.waitForFunction(() => !!(window as unknown as { __kloud?: K }).__kloud);
     await page.evaluate(async () => {
       const rt = (window as unknown as { __kloud: K }).__kloud;

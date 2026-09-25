@@ -30,6 +30,8 @@ export interface MountOptions {
   initialModule?: AppModule;
   /** Scope keyboard shortcuts to the editor root (when embedded in a larger page). */
   embedded?: boolean;
+  /** Optional host-app navigation rendered in the Studio toolbar. */
+  exit?: { label?: string; onExit(): void };
   onReady?: (ctx: AppContext) => void;
 }
 
@@ -77,6 +79,7 @@ export async function mountKloudEditor(root: HTMLElement, options: MountOptions 
   const body = h('div', { class: 'k-app__body' }, left, main, right, scrim);
 
   const toolbar = createAppToolbar(rt, state, {
+    exit: options.exit,
     openDrawer: () => state.leftOpen.set(!state.leftOpen.value),
     openHelp: () => openShortcutsHelp(rt),
     libraryUp: () => {

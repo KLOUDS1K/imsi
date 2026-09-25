@@ -31,6 +31,7 @@ import type { AppRuntime } from '@/app/createContext';
 import { SORT_LABELS, type ShellState } from './state';
 
 export interface ToolbarActions {
+  exit?: { label?: string; onExit(): void };
   openDrawer(): void;
   openHelp(): void;
   /** Navigate the Library one folder level up. Returns false at the root. */
@@ -53,6 +54,9 @@ export function createAppToolbar(rt: AppRuntime, state: ShellState, actions: Too
 
   /* ---- left: drawer, chevrons, breadcrumb, module switch ---- */
   const menuBtn = createIconButton({ icon: 'menu', label: 'Show sidebar', class: 'k-tb__drawer', onClick: () => actions.openDrawer() });
+  const exitBtn = actions.exit
+    ? createIconButton({ icon: 'arrow-left', label: actions.exit.label ?? 'Back', onClick: () => actions.exit?.onExit() })
+    : null;
   const arrows = createNavArrows({
     onBack: () => {
       if (ctx.module.value === 'develop') ctx.module.set('library');
@@ -80,7 +84,7 @@ export function createAppToolbar(rt: AppRuntime, state: ShellState, actions: Too
     },
   });
   moduleSwitch.el.classList.add('k-tb__modules');
-  d.add(() => [menuBtn, arrows, crumbs, moduleSwitch].forEach((c) => c.destroy()));
+  d.add(() => [exitBtn, menuBtn, arrows, crumbs, moduleSwitch].forEach((c) => c?.destroy()));
 
   /* ---- library controls ---- */
   const search = createSearchInput({
@@ -209,12 +213,16 @@ export function createAppToolbar(rt: AppRuntime, state: ShellState, actions: Too
   const exportBtn = createButton({ label: 'Export', icon: 'export', variant: 'primary', size: 'sm', class: 'k-tb__export', title: 'Export (Shift+⌘E)', onClick: () => ctx.openExportDialog() });
   d.add(() => [theme, lock, help, exportBtn].forEach((c) => c.destroy()));
 
+  // The drawer button is responsive-only, while a host-provided exit action
+  // must remain available at every viewport size.
+  const exitGroup = exitBtn ? toolbarGroup(exitBtn.el) : null;
   const drawerGroup = toolbarGroup(menuBtn.el);
   drawerGroup.classList.add('k-tb__drawer-group');
   const el = createToolbar({
     label: 'Toolbar',
     class: 'k-tb',
     children: [
+      ...(exitGroup ? [exitGroup] : []),
       drawerGroup,
       arrows.el,
       crumbs.el,

@@ -22,7 +22,16 @@ export function createDevelopLeftPanel(ctx: AppContext, opts: { navigator?: HTML
   const presetList = h('div', { class: 'k-pnl-list' });
   // Live preview on hover, delegated so it survives re-renders under a still pointer.
   let hoveredId: string | null = null;
+  // Applying a preset re-renders the row under a still pointer. Browsers can
+  // then emit a fresh pointerover and accidentally preview the preset again
+  // on top of its applied result. Suppress it until the pointer leaves.
+  let appliedUnderPointer: string | null = null;
   const previewFor = (id: string | null) => {
+    if (id && id === appliedUnderPointer) {
+      hoveredId = id;
+      ctx.previewParams.set(null);
+      return;
+    }
     if (id === hoveredId) return;
     hoveredId = id;
     const params = b.params;
@@ -33,7 +42,10 @@ export function createDevelopLeftPanel(ctx: AppContext, opts: { navigator?: HTML
     const row = (e.target as HTMLElement).closest<HTMLElement>('.k-pnl-preset');
     previewFor(row?.dataset.presetId ?? null);
   });
-  presetList.addEventListener('pointerleave', () => previewFor(null));
+  presetList.addEventListener('pointerleave', () => {
+    appliedUnderPointer = null;
+    previewFor(null);
+  });
   d.add(() => {
     if (hoveredId) ctx.previewParams.set(null);
   });
@@ -65,6 +77,7 @@ export function createDevelopLeftPanel(ctx: AppContext, opts: { navigator?: HTML
     // Treat the applied preset as "already hovered": the list re-renders under the still
     // pointer and the browser re-fires pointerover, which must not preview it on top of itself.
     hoveredId = p.id;
+    appliedUnderPointer = p.id;
     ctx.previewParams.set(null);
     const base = store.params;
     lastApplied = { preset: p, base };

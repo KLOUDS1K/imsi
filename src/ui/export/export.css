@@ -65,6 +65,34 @@
   border-color: var(--k-accent);
   color: var(--k-text);
 }
+.k-exp__recipe {
+  display: inline-flex;
+  gap: 2px;
+  max-width: 100%;
+}
+.k-exp__recipe .k-exp__chip {
+  overflow-wrap: anywhere;
+}
+.k-exp__summary {
+  margin: 4px 0;
+  padding: 9px 12px;
+  color: var(--k-text);
+  background: var(--k-surface-2);
+  border-radius: var(--k-radius-sm);
+  font-variant-numeric: tabular-nums;
+}
+.k-exp__progress {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--k-border);
+  font-size: var(--k-fs-sm);
+}
+.k-exp__progress[hidden] { display: none; }
+.k-exp[inert] { opacity: 0.55; }
 .k-exp__pos {
   display: grid;
   grid-template-columns: repeat(3, 22px);

@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kloudphoto",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  },
+
+  "observability": { "enabled": true },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kloudphoto",
+      "database_id": "dd17ceea-0fe0-49ed-87be-1371a00afc9b"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "kloudphoto-media"
+    }
+  ],
+
+  "vars": {
+    "SITE_TITLE": "KLOUD.PHOTOGRAPHY",
+    "MAX_UPLOAD_BYTES": "104857600"
+  }
+}

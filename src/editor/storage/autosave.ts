@@ -46,6 +46,7 @@ export interface AutosaveOptions {
 interface Pending {
   photoId: string;
   state: SerializedEditState;
+  revision: number;
 }
 
 function isRecord(v: unknown): v is AutosaveRecord {
@@ -62,6 +63,10 @@ export class AutosaveManager {
   private readonly onSaved?: (photoId: string, savedAt: number) => void;
   private readonly now: () => number;
   private pending: Pending | null = null;
+  /** A failed save must survive even if a different photo is being edited. */
+  private failed = new Map<string, Pending>();
+  private latestRevision = new Map<string, number>();
+  private revision = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   /** Tail of the write queue; never rejects (each caller gets its own promise). */
   private queue: Promise<void> = Promise.resolve();
@@ -80,7 +85,7 @@ export class AutosaveManager {
 
   /** Photo whose state is waiting for the debounce, if any. */
   get pendingPhotoId(): string | null {
-    return this.pending?.photoId ?? null;
+    return this.pending?.photoId ?? this.failed.keys().next().value ?? null;
   }
 
   /** Queue `state` for `photoId`; the latest state wins within the debounce window. */
@@ -89,7 +94,10 @@ export class AutosaveManager {
       // Switching photos: the previous photo's latest state must not be dropped or overwritten.
       this.flushInBackground();
     }
-    this.pending = { photoId, state };
+    const revision = ++this.revision;
+    this.latestRevision.set(photoId, revision);
+    this.failed.delete(photoId);
+    this.pending = { photoId, state, revision };
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.timer = null;
@@ -109,15 +117,25 @@ export class AutosaveManager {
     }
     const job = this.pending;
     this.pending = null;
-    if (!job) return this.queue;
     return this.enqueue(async () => {
-      try {
-        await this.write(job);
-      } catch (err) {
-        // Keep the unsaved state around so the next flush/markClean retries it.
-        if (!this.pending) this.pending = job;
-        throw err;
+      // Collect failures inside the queue: an earlier in-flight write may have
+      // failed after this flush was requested. Retry each photo independently.
+      const jobs = [...this.failed.values(), ...(job ? [job] : [])];
+      this.failed.clear();
+      let firstError: unknown;
+      let hadError = false;
+      for (const item of jobs) {
+        if (this.latestRevision.get(item.photoId) !== item.revision) continue;
+        try {
+          await this.write(item);
+          if (this.latestRevision.get(item.photoId) === item.revision) this.latestRevision.delete(item.photoId);
+        } catch (err) {
+          if (this.latestRevision.get(item.photoId) === item.revision) this.failed.set(item.photoId, item);
+          if (!hadError) firstError = err;
+          hadError = true;
+        }
       }
+      if (hadError) throw firstError;
     });
   }
 
@@ -170,7 +188,7 @@ export class AutosaveManager {
   }
 
   private flushInBackground(): void {
-    const id = this.pending?.photoId ?? '';
+    const id = this.pendingPhotoId ?? '';
     this.flush().catch((err: unknown) => this.onError(err, id));
   }
 

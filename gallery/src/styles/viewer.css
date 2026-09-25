@@ -1,0 +1,320 @@
+/*
+ * The viewer.
+ *
+ * Deliberately the same near-black in either theme: a photograph judged
+ * against a light page is a photograph judged wrong, and this is the surface
+ * someone decides from before downloading the original.
+ */
+
+.lightbox {
+  --viewer-ink: #f4f3f1;
+  --viewer-ink-2: rgba(244, 243, 241, 0.62);
+  --viewer-line: rgba(255, 255, 255, 0.13);
+  --viewer-surface: rgba(255, 255, 255, 0.07);
+
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: #08080a;
+  color: var(--viewer-ink);
+  opacity: 0;
+  transition: opacity 0.18s var(--ease);
+}
+.lightbox.is-open {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------- bar */
+
+.viewer__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px clamp(14px, 2.4vw, 26px);
+  border-bottom: 1px solid var(--viewer-line);
+  min-width: 0;
+}
+
+.viewer__id {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+.viewer__name {
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.viewer__count {
+  flex: none;
+  font-family: var(--font-display);
+  font-stretch: var(--display-stretch);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--viewer-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.viewer__count:empty {
+  display: none;
+}
+
+/* A label once the uploaded file is on screen — or, before that, the offer. */
+.viewer__badge {
+  flex: none;
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--viewer-line);
+  border-radius: 99px;
+  background: transparent;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--viewer-ink-2);
+  white-space: nowrap;
+  animation: viewer-badge 0.32s var(--ease) both;
+}
+.viewer__badge:disabled {
+  cursor: default;
+}
+.viewer__badge--ask {
+  cursor: pointer;
+  color: var(--viewer-ink);
+  transition: border-color 0.16s var(--ease), background 0.16s var(--ease);
+}
+.viewer__badge--ask:hover {
+  border-color: var(--viewer-ink-2);
+  background: rgb(255 255 255 / 0.07);
+}
+@keyframes viewer-badge {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .viewer__badge {
+    animation: none;
+  }
+}
+
+.viewer__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.viewer__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--viewer-line);
+  border-radius: var(--r-sm);
+  background: var(--viewer-surface);
+  color: var(--viewer-ink);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.14s var(--ease), border-color 0.14s var(--ease),
+    color 0.14s var(--ease);
+}
+.viewer__btn:hover {
+  background: rgba(255, 255, 255, 0.13);
+}
+.viewer__btn:focus-visible {
+  outline: 2px solid var(--viewer-ink);
+  outline-offset: 2px;
+}
+
+/* The download is the point of the page, so it is the one filled control. */
+.viewer__btn--download {
+  background: var(--viewer-ink);
+  border-color: transparent;
+  color: #101014;
+}
+.viewer__btn--download:hover {
+  background: #ffffff;
+}
+.viewer__btn-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.viewer__btn--icon {
+  width: 34px;
+  padding: 8px;
+  justify-content: center;
+}
+
+/* -------------------------------------------------------------------- stage */
+
+.viewer__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: clamp(12px, 2.5vh, 26px) clamp(12px, 6vw, 76px);
+}
+
+/*
+ * The figure's box is measured and set in JS (see fitFigure in lightbox.ts).
+ * Fitting it in CSS instead does not work here: sizing the <img> with
+ * max-height:100% is silently dropped, because a percentage max-height
+ * against an auto-height parent resolves to `none`; and moving the ratio onto
+ * the figure with aspect-ratio + auto width makes the width depend on the
+ * image, which depends on the width. Measuring once per paint is exact, and
+ * it keeps the figure's box equal to the photo — so a click on the letterbox
+ * beside a panorama closes the viewer instead of zooming it.
+ */
+.viewer__figure {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  border-radius: 3px;
+  opacity: 0;
+  transform: scale(0.985);
+  transition: opacity 0.26s var(--ease), transform 0.26s var(--ease);
+  cursor: zoom-in;
+}
+.viewer__figure.is-loaded {
+  opacity: 1;
+  transform: none;
+}
+.viewer__img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 3px;
+}
+
+.viewer__stage.is-zoomed {
+  overflow: auto;
+  place-items: start center;
+}
+.viewer__stage.is-zoomed .viewer__figure {
+  cursor: zoom-out;
+}
+
+.viewer__figure--fallback {
+  width: auto !important;
+  height: auto !important;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 64px 40px;
+  border: 1px dashed var(--viewer-line);
+  border-radius: var(--r-lg);
+  text-align: center;
+  cursor: default;
+}
+.viewer__fallback {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+.viewer__fallback-glyph {
+  width: 34px;
+  height: 34px;
+  color: var(--viewer-ink-2);
+}
+.viewer__fallback-text {
+  max-width: 34ch;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--viewer-ink-2);
+}
+
+/* ------------------------------------------------------------------- arrows */
+
+.viewer__arrow {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  width: 44px;
+  height: 44px;
+  padding: 12px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--viewer-line);
+  border-radius: 99px;
+  background: rgba(12, 12, 14, 0.55);
+  backdrop-filter: blur(12px);
+  color: var(--viewer-ink);
+  cursor: pointer;
+  transition: background 0.14s var(--ease), opacity 0.14s var(--ease);
+}
+.viewer__arrow:hover:not(:disabled) {
+  background: rgba(40, 40, 44, 0.8);
+}
+.viewer__arrow:disabled {
+  opacity: 0.22;
+  cursor: default;
+}
+.viewer__arrow--prev {
+  left: clamp(8px, 1.6vw, 20px);
+}
+.viewer__arrow--next {
+  right: clamp(8px, 1.6vw, 20px);
+}
+
+/* ------------------------------------------------------------------ caption */
+
+.viewer__caption {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 11px clamp(14px, 2.4vw, 26px) calc(13px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--viewer-line);
+  text-align: center;
+}
+.viewer__facts {
+  font-size: 11.5px;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  color: var(--viewer-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.viewer__file {
+  font-size: 11.5px;
+  color: var(--viewer-ink-2);
+  opacity: 0.8;
+  word-break: break-all;
+}
+.viewer__desc {
+  max-width: 68ch;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--viewer-ink);
+  opacity: 0.86;
+}
+
+@media (max-width: 620px) {
+  .viewer__btn-text {
+    display: none;
+  }
+  .viewer__btn--download {
+    width: 34px;
+    padding: 8px;
+    justify-content: center;
+  }
+  .viewer__arrow {
+    width: 38px;
+    height: 38px;
+    padding: 10px;
+  }
+  .viewer__stage {
+    padding: 10px 8px;
+  }
+}

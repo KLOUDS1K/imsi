@@ -35,5 +35,8 @@ test('gallery opens a stored original directly in Studio', async ({ page }) => {
 
   await expect(page).toHaveURL(/\/studio$/);
   await expect(page.locator('.k-app[data-module="develop"]')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('button', { name: 'Back to photos' })).toBeVisible();
+  const back = page.getByRole('button', { name: 'Back to photos' });
+  await expect(back).toBeVisible();
+  await back.click();
+  await expect(page).toHaveURL(/\/$/);
 });

@@ -213,12 +213,16 @@ export function createAppToolbar(rt: AppRuntime, state: ShellState, actions: Too
   const exportBtn = createButton({ label: 'Export', icon: 'export', variant: 'primary', size: 'sm', class: 'k-tb__export', title: 'Export (Shift+⌘E)', onClick: () => ctx.openExportDialog() });
   d.add(() => [theme, lock, help, exportBtn].forEach((c) => c.destroy()));
 
-  const drawerGroup = toolbarGroup(...(exitBtn ? [exitBtn.el, menuBtn.el] : [menuBtn.el]));
+  // The drawer button is responsive-only, while a host-provided exit action
+  // must remain available at every viewport size.
+  const exitGroup = exitBtn ? toolbarGroup(exitBtn.el) : null;
+  const drawerGroup = toolbarGroup(menuBtn.el);
   drawerGroup.classList.add('k-tb__drawer-group');
   const el = createToolbar({
     label: 'Toolbar',
     class: 'k-tb',
     children: [
+      ...(exitGroup ? [exitGroup] : []),
       drawerGroup,
       arrows.el,
       crumbs.el,

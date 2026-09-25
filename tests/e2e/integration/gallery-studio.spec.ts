@@ -38,5 +38,5 @@ test('gallery opens a stored original directly in Studio', async ({ page }) => {
   const back = page.getByRole('button', { name: 'Back to photos' });
   await expect(back).toBeVisible();
   await back.click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(new RegExp(`[?&]p=${PHOTO_ID}(?:&|$)`));
 });

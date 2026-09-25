@@ -14,6 +14,7 @@ import { openSheet, toast } from './ui'
 import { beginTransfer } from './transfers'
 import { uploadPhoto } from './upload'
 import { loadStats, statsPanel } from './stats'
+import { takeStudioLoginReturn } from './studio-link'
 
 /** Today, offered as a placeholder for people who name folders by date. */
 function today(): string {
@@ -64,6 +65,10 @@ export async function signIn(): Promise<void> {
       }
       setAdminHooks(HOOKS)
       update({ admin: true, username })
+      if (takeStudioLoginReturn()) {
+        window.location.assign('/studio')
+        return
+      }
       await reload()
       toast(`Signed in as ${username}`)
       return

@@ -3,6 +3,8 @@ import type { Env, PhotoRow } from './types'
 
 const COLUMNS = `id, folder_id, title, taken_on, location, description, original_key,
                  original_filename, original_type, original_size, preview_key, thumb_key,
+                 edited_key, edited_preview_key, edited_thumb_key, edited_filename,
+                 edited_type, edited_size, edited_width, edited_height, edited_updated_at,
                  width, height, placeholder, sort_order, published, created_at, updated_at`
 
 const flag = (admin: boolean) => (admin ? 1 : 0)
@@ -120,6 +122,40 @@ export async function update(env: Env, id: string, patch: PhotoPatch): Promise<b
   const res = await env.DB.prepare(`UPDATE photos SET ${sets.join(', ')} WHERE id = ?`)
     .bind(...values)
     .run()
+  return (res.meta.changes ?? 0) > 0
+}
+
+export interface EditedPhoto {
+  key: string
+  previewKey: string | null
+  thumbKey: string | null
+  filename: string
+  type: string
+  size: number
+  width: number
+  height: number
+}
+
+export async function setEdited(env: Env, id: string, edited: EditedPhoto): Promise<boolean> {
+  const now = Math.floor(Date.now() / 1000)
+  const res = await env.DB.prepare(
+    `UPDATE photos SET edited_key = ?, edited_preview_key = ?, edited_thumb_key = ?,
+       edited_filename = ?, edited_type = ?, edited_size = ?, edited_width = ?,
+       edited_height = ?, edited_updated_at = ?, updated_at = ? WHERE id = ?`,
+  ).bind(
+    edited.key, edited.previewKey, edited.thumbKey, edited.filename, edited.type,
+    edited.size, edited.width, edited.height, now, now, id,
+  ).run()
+  return (res.meta.changes ?? 0) > 0
+}
+
+export async function clearEdited(env: Env, id: string): Promise<boolean> {
+  const now = Math.floor(Date.now() / 1000)
+  const res = await env.DB.prepare(
+    `UPDATE photos SET edited_key = NULL, edited_preview_key = NULL, edited_thumb_key = NULL,
+       edited_filename = NULL, edited_type = NULL, edited_size = NULL, edited_width = NULL,
+       edited_height = NULL, edited_updated_at = NULL, updated_at = ? WHERE id = ?`,
+  ).bind(now, id).run()
   return (res.meta.changes ?? 0) > 0
 }
 

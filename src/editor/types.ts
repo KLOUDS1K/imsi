@@ -773,6 +773,8 @@ export type WatermarkPosition =
   | 'bottom'
   | 'bottom-right';
 
+export type WatermarkBlendMode = 'normal' | 'multiply' | 'screen' | 'overlay' | 'soft-light' | 'difference';
+
 export interface WatermarkSettings {
   enabled: boolean;
   /** 'kloud' renders "KLOUD", 'kloud-photography' renders "KLOUD.PHOTOGRAPHY" in the house style. */
@@ -791,6 +793,7 @@ export interface WatermarkSettings {
   size: number;
   /** 0..100 */
   opacity: number;
+  blendMode: WatermarkBlendMode;
   /** Margin as % of the image's short edge (0..20). */
   margin: number;
   shadow: boolean;

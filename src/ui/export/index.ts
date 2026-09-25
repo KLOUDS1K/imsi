@@ -130,6 +130,7 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
     requestAnimationFrame(() => {
       rebuildQueued = false;
       if (closed) return;
+      ctx.exportSettings.set(structuredClone(s));
       void renderWatermarkPreview(preview, s.watermark, previewBg);
       const first = ctx.library.get(ids[0]);
       const meta: PhotoMeta = firstDoc?.meta ?? first?.meta ?? ({ fileName: 'photo', fileSize: 0, mimeType: '', format: 'jpeg', width: 0, height: 0, orientation: 1, bitDepth: 8 } as PhotoMeta);
@@ -284,6 +285,20 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
       createSlider({ label: 'Margin', min: 0, max: 20, step: 0.1, value: wm.margin, defaultValue: 3, unit: '%', fill: 'min', onInput: (v) => ((wm.margin = v), refresh()) }),
     ];
     const wmShadow = createToggle({ checked: wm.shadow, label: 'Soft shadow', size: 'sm', onChange: (v) => ((wm.shadow = v), refresh()) });
+    const wmBlend = createSelect<WatermarkSettings['blendMode']>({
+      ariaLabel: 'Watermark blend mode',
+      size: 'sm',
+      value: wm.blendMode ?? 'normal',
+      options: [
+        { value: 'normal', label: 'Normal' },
+        { value: 'multiply', label: 'Multiply' },
+        { value: 'screen', label: 'Screen' },
+        { value: 'overlay', label: 'Overlay' },
+        { value: 'soft-light', label: 'Soft light' },
+        { value: 'difference', label: 'Difference' },
+      ],
+      onChange: (v) => ((wm.blendMode = v), refresh()),
+    });
     const color = h('input', { type: 'color', class: 'k-exp__color', value: wm.color, oninput: (e: Event) => ((wm.color = (e.target as HTMLInputElement).value), refresh()) });
     const logo = h('input', {
       type: 'file',
@@ -322,7 +337,7 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
       ],
       onChange: (v) => (s.outputSharpening.amount = v),
     });
-    d.add(() => [fmt, quality, depth, mode, enlarge, space, metaSel, noGps, wmOn, wmKind, wmShadow, sharpOn, sharpTarget, sharpAmount, ...wmSliders].forEach((c) => c.destroy()));
+    d.add(() => [fmt, quality, depth, mode, enlarge, space, metaSel, noGps, wmOn, wmKind, wmBlend, wmShadow, sharpOn, sharpTarget, sharpAmount, ...wmSliders].forEach((c) => c.destroy()));
 
     body.append(
       h('div', { class: 'k-exp__col' },
@@ -360,8 +375,9 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
         wm.kind === 'text' ? field('Text', textInput(wm.text, (v) => ((wm.text = v), refresh()))) : null,
         wm.kind === 'image' ? field('Logo', logo) : field('Colour', color),
         field('Position', posGrid),
-        ...wmSliders.map((x) => x.el),
-        wmShadow.el,
+        field('Blend', wmBlend.el),
+        ...(wm.kind === 'image' ? [wmSliders[0].el] : wmSliders.map((x) => x.el)),
+        wm.kind === 'image' ? null : wmShadow.el,
         preview,
         h('p', { class: 'k-exp__hint' }, ids.length > 1 ? `The watermark is applied to all ${ids.length} photos.` : 'Preview of the watermark on this photo.'),
       ),

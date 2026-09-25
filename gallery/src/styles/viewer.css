@@ -21,6 +21,8 @@
   color: var(--viewer-ink);
   opacity: 0;
   transition: opacity 0.18s var(--ease);
+  overscroll-behavior: none;
+  touch-action: none;
 }
 .lightbox.is-open {
   opacity: 1;
@@ -112,6 +114,8 @@
   align-items: center;
   gap: 8px;
   flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .viewer__btn {
@@ -147,6 +151,9 @@
 .viewer__btn--download:hover {
   background: #ffffff;
 }
+.viewer__btn--download-secondary {
+  border-color: rgba(255, 255, 255, 0.35);
+}
 .viewer__btn-icon {
   width: 16px;
   height: 16px;
@@ -162,10 +169,12 @@
 
 .viewer__stage {
   position: relative;
-  display: grid;
-  place-items: center;
   min-height: 0;
   padding: clamp(12px, 2.5vh, 26px) clamp(12px, 6vw, 76px);
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: contain;
+  user-select: none;
 }
 
 /*
@@ -179,18 +188,22 @@
  * beside a panorama closes the viewer instead of zooming it.
  */
 .viewer__figure {
-  position: relative;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin: 0;
+  transform-origin: center;
+  will-change: transform;
   background-size: cover;
   background-position: center;
   border-radius: 3px;
   opacity: 0;
-  transform: scale(0.985);
-  transition: opacity 0.26s var(--ease), transform 0.26s var(--ease);
+  transform: translate3d(-50%, -50%, 0) scale(0.985);
+  transition: opacity 0.26s var(--ease);
   cursor: zoom-in;
 }
 .viewer__figure.is-loaded {
   opacity: 1;
-  transform: none;
 }
 .viewer__img {
   width: 100%;
@@ -200,16 +213,17 @@
 }
 
 .viewer__stage.is-zoomed {
-  overflow: auto;
-  place-items: start center;
+  cursor: grab;
 }
 .viewer__stage.is-zoomed .viewer__figure {
-  cursor: zoom-out;
+  cursor: grab;
+}
+.viewer__figure.is-dragging,
+.viewer__stage.is-zoomed .viewer__figure.is-dragging {
+  cursor: grabbing;
 }
 
 .viewer__figure--fallback {
-  width: auto !important;
-  height: auto !important;
   display: grid;
   justify-items: center;
   gap: 12px;
@@ -301,13 +315,28 @@
 }
 
 @media (max-width: 620px) {
-  .viewer__btn-text {
-    display: none;
+  .viewer__bar {
+    gap: 8px;
+    padding: 10px 8px;
   }
-  .viewer__btn--download {
-    width: 34px;
-    padding: 8px;
-    justify-content: center;
+  .viewer__id {
+    gap: 6px;
+  }
+  .viewer__name {
+    max-width: 28vw;
+  }
+  .viewer__tools {
+    gap: 5px;
+  }
+  .viewer__btn {
+    height: 32px;
+    padding: 0 8px;
+    gap: 4px;
+    font-size: 11.5px;
+  }
+  .viewer__btn--icon {
+    width: 32px;
+    padding: 7px;
   }
   .viewer__arrow {
     width: 38px;
@@ -316,5 +345,23 @@
   }
   .viewer__stage {
     padding: 10px 8px;
+  }
+  .viewer__caption {
+    padding-top: 8px;
+    padding-bottom: calc(9px + env(safe-area-inset-bottom));
+  }
+  .viewer__desc {
+    display: none;
+  }
+}
+
+@media (max-width: 430px) {
+  .viewer__name,
+  .viewer__count {
+    display: none;
+  }
+  .viewer__tools {
+    width: 100%;
+    justify-content: space-between;
   }
 }

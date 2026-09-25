@@ -87,6 +87,15 @@ export interface PhotoRow {
   original_size: number
   preview_key: string | null
   thumb_key: string | null
+  edited_key: string | null
+  edited_preview_key: string | null
+  edited_thumb_key: string | null
+  edited_filename: string | null
+  edited_type: string | null
+  edited_size: number | null
+  edited_width: number | null
+  edited_height: number | null
+  edited_updated_at: number | null
   width: number | null
   height: number | null
   placeholder: string | null
@@ -118,11 +127,22 @@ export interface PublicPhoto {
    */
   thumbUrl: string
   previewUrl: string | null
+  originalThumbUrl: string
+  originalPreviewUrl: string | null
   /**
    * The untouched original, served inline so the viewer can show the real file
    * rather than a re-encoded copy of it.
    */
   originalUrl: string
+  editedUrl: string | null
+  editedPreviewUrl: string | null
+  editedThumbUrl: string | null
+  editedFilename: string | null
+  editedType: string | null
+  editedSize: number | null
+  editedWidth: number | null
+  editedHeight: number | null
+  editedUpdatedAt: number | null
   hidden?: boolean
   sortOrder?: number
 }
@@ -133,6 +153,11 @@ export function toPublicPhoto(
   thumbUrl: string,
   previewUrl: string | null,
   originalUrl: string,
+  originalThumbUrl: string,
+  originalPreviewUrl: string | null,
+  editedUrl: string | null,
+  editedPreviewUrl: string | null,
+  editedThumbUrl: string | null,
 ): PublicPhoto {
   const out: PublicPhoto = {
     id: r.id,
@@ -151,6 +176,17 @@ export function toPublicPhoto(
     thumbUrl,
     previewUrl,
     originalUrl,
+    originalThumbUrl,
+    originalPreviewUrl,
+    editedUrl,
+    editedPreviewUrl,
+    editedThumbUrl,
+    editedFilename: r.edited_filename,
+    editedType: r.edited_type,
+    editedSize: r.edited_size,
+    editedWidth: r.edited_width,
+    editedHeight: r.edited_height,
+    editedUpdatedAt: r.edited_updated_at,
   }
   if (admin) {
     out.hidden = r.published === 0

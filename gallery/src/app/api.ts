@@ -104,5 +104,18 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
       }),
+    uploadEdited: (id: string, revision: string, kind: 'full' | 'preview' | 'thumb', blob: Blob) =>
+      request<{ ok: true; key: string }>(`/api/admin/photos/${id}/edited/${revision}/${kind}`, {
+        method: 'PUT',
+        headers: { 'content-type': blob.type },
+        body: blob,
+      }),
+    commitEdited: (id: string, body: { revision: string; filename: string; width: number; height: number }) =>
+      request<{ ok: true; photo: Photo }>(`/api/admin/photos/${id}/edited`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    removeEdited: (id: string) =>
+      request<{ ok: true }>(`/api/admin/photos/${id}/edited`, { method: 'DELETE' }),
   },
 }

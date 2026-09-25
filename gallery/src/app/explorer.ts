@@ -27,7 +27,7 @@ import { adminHooks } from './hooks'
 import { initPointerTilt, initScrollShade } from './motion'
 import { api } from './api'
 import { go, hrefFor } from './router'
-import { downloadOriginal } from './download'
+import { downloadEdited, downloadOriginal } from './download'
 import { openLightbox, setSequence } from './lightbox'
 import { openPhotoInStudio } from './studio-link'
 
@@ -412,11 +412,12 @@ function openPhotoMenu(photo: Photo, x: number, y: number, anchor?: HTMLElement)
   const admin = adminHooks()
   const items: MenuItem[] = [
     { label: 'View', icon: 'image', run: () => openLightbox([photo], photo.id) },
-    { label: 'Edit in Studio', icon: 'pencil', run: () => openPhotoInStudio(photo) },
     { label: 'Download original', icon: 'download', run: () => downloadOriginal(photo) },
   ]
+  if (photo.editedUrl) items.push({ label: 'Download edited', icon: 'download', run: () => downloadEdited(photo) })
   if (admin) {
     items.push(
+      { label: 'Edit in Studio', icon: 'pencil', run: () => openPhotoInStudio(photo) },
       { label: 'Rename', icon: 'pencil', run: () => admin.renamePhoto(photo) },
       { label: 'Move to another folder', icon: 'move', run: () => admin.movePhoto(photo) },
       { label: 'Delete', icon: 'trash', danger: true, run: () => admin.deletePhoto(photo) },
@@ -867,6 +868,7 @@ function renderChrome(): void {
   account.innerHTML = icon(state.admin ? 'user' : 'lock')
   account.classList.toggle('is-active', state.admin)
   account.title = state.admin ? `${state.username ?? 'Admin'} — menu` : 'Admin sign in'
+  need<HTMLElement>('[data-role="studio"]').hidden = !state.admin
 
   const sortBtn = need<HTMLButtonElement>('[data-role="sort"]')
   sortBtn.classList.toggle('is-asc', state.sortDir === 'asc')

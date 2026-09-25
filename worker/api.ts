@@ -51,10 +51,23 @@ import {
 } from './stats'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const REVISION_RE = /^[A-Za-z0-9_-]{8,64}$/
+const SAFE_IMAGE_RE = /^image\/(jpeg|png|webp|avif)$/
 
 function assertId(id: string | undefined): string {
   if (!id || !UUID_RE.test(id)) badRequest('Invalid id')
   return id.toLowerCase()
+}
+
+function assertRevision(value: unknown): string {
+  if (typeof value !== 'string' || !REVISION_RE.test(value)) badRequest('Invalid edit revision')
+  return value
+}
+
+function positiveDimension(value: unknown, label: string): number {
+  const n = Math.round(Number(value))
+  if (!Number.isFinite(n) || n < 1 || n > 100_000) badRequest(`Invalid ${label}`)
+  return n
 }
 
 /** '' is the root of the tree and is always a legal destination. */
@@ -155,12 +168,22 @@ function publicPhotos(env: Env, rows: PhotoRow[], admin: boolean): Promise<Publi
       // One token per photo, three URLs from it — a listing of a hundred photos
       // signs a hundred times rather than three hundred.
       const token = await mediaToken(env, row.id)
+      const originalThumb = mediaPath('t', row.id, token)
+      const originalPreview = row.preview_key ? mediaPath('p', row.id, token) : null
+      const edited = row.edited_key ? mediaPath('e', row.id, token) : null
+      const editedPreview = row.edited_preview_key ? mediaPath('ep', row.id, token) : null
+      const editedThumb = row.edited_thumb_key ? mediaPath('et', row.id, token) : null
       return toPublicPhoto(
         row,
         admin,
-        mediaPath('t', row.id, token),
-        row.preview_key ? mediaPath('p', row.id, token) : null,
+        editedThumb ?? editedPreview ?? edited ?? originalThumb,
+        editedPreview ?? edited ?? originalPreview,
         mediaPath('o', row.id, token),
+        originalThumb,
+        originalPreview,
+        edited,
+        editedPreview,
+        editedThumb,
       )
     }),
   )
@@ -318,7 +341,7 @@ export async function handleApi(
 
   // Optimised derivatives for browsing. Keyed by photo id, and the bytes for a
   // given id never change, so they can cache forever.
-  const media = /^\/media\/(t|p|o)\/([0-9a-f-]+)$/i.exec(path)
+  const media = /^\/media\/(et|ep|e|t|p|o)\/([0-9a-f-]+)$/i.exec(path)
   if (media && method === 'GET') {
     const id = assertId(media[2])
     // The token is the capability. Without it this route would hand out the
@@ -346,7 +369,7 @@ export async function handleApi(
      * offering to save it. The bytes are identical either way; the original is
      * never re-encoded on any path.
      */
-    if (media[1] === 'o') {
+    if (media[1] === 'o' || media[1] === 'e') {
       const row = await photos.getById(env, id)
       if (!row) return error(404, 'Not found')
       const refusal = await mayReadOriginal(env, request, row, Boolean(await getSession(env, request)))
@@ -354,15 +377,20 @@ export async function handleApi(
 
       // Who may read this depends on the grant cookie, so the answer is never
       // shareable however it was asked for.
-      const type = inlineImageType(row.original_filename, row.original_type)
+      const edited = media[1] === 'e'
+      const key = edited ? row.edited_key : row.original_key
+      const filename = edited ? row.edited_filename : row.original_filename
+      const storedType = edited ? row.edited_type : row.original_type
+      if (!key || !filename) return error(404, edited ? 'Edited file not found' : 'Not found')
+      const type = inlineImageType(filename, storedType ?? '')
       // Inline is only ever offered for something that is actually a picture.
       // Anything else is handed over as a file, so this route can never be
       // talked into rendering arbitrary content on the gallery's own origin.
       const showable = type.startsWith('image/')
-      const res = await serveObject(env, row.original_key, request, {
+      const res = await serveObject(env, key, request, {
         ...PRIVATE,
         'content-disposition': contentDisposition(
-          row.original_filename,
+          filename,
           showable ? 'inline' : 'attachment',
         ),
         'content-type': type,
@@ -371,7 +399,15 @@ export async function handleApi(
       return res ?? error(404, 'Not found')
     }
 
-    const key = media[1] === 't' ? keys.thumb(id) : keys.preview(id)
+    let key: string | null = null
+    if (media[1] === 't') key = keys.thumb(id)
+    else if (media[1] === 'p') key = keys.preview(id)
+    else {
+      const row = await photos.getById(env, id)
+      if (!row) return error(404, 'Not found')
+      key = media[1] === 'et' ? row.edited_thumb_key : row.edited_preview_key
+    }
+    if (!key) return error(404, 'Not found')
     const res = await serveObject(env, key, request, shareable)
     return res ?? error(404, 'Not found')
   }
@@ -379,7 +415,7 @@ export async function handleApi(
   // The whole point of the site: hand back the untouched original, under the
   // name it was uploaded with. A rename in the explorer changes the label the
   // gallery shows, never the bytes or the filename that lands on disk.
-  const dl = /^\/download\/([0-9a-f-]+)$/i.exec(path)
+  const dl = /^\/download\/([0-9a-f-]+)(?:\/(original|edited))?$/i.exec(path)
   if (dl && method === 'GET') {
     const id = assertId(dl[1])
     const row = await photos.getById(env, id)
@@ -387,13 +423,18 @@ export async function handleApi(
     const admin = Boolean(await getSession(env, request))
     const refusal = await mayReadOriginal(env, request, row, admin)
     if (refusal) return refusal
-    const res = await serveObject(env, row.original_key, request, {
-      'content-disposition': contentDisposition(row.original_filename),
-      'content-type': row.original_type || 'application/octet-stream',
+    const edited = dl[2] === 'edited'
+    const key = edited ? row.edited_key : row.original_key
+    const filename = edited ? row.edited_filename : row.original_filename
+    const type = edited ? row.edited_type : row.original_type
+    if (!key || !filename) return error(404, edited ? 'Edited file not found' : 'Original file not found')
+    const res = await serveObject(env, key, request, {
+      'content-disposition': contentDisposition(filename),
+      'content-type': type || 'application/octet-stream',
       'cache-control': 'private, max-age=0, must-revalidate',
       'x-content-type-options': 'nosniff',
     })
-    if (!res) return error(404, 'Original file is missing from storage')
+    if (!res) return error(404, edited ? 'Edited file is missing from storage' : 'Original file is missing from storage')
     // Only a fresh start counts — a resumed range is the same download coming
     // back for more of itself.
     if (!admin && res.status === 200) ctx.waitUntil(recordDownload(env, id))
@@ -616,11 +657,16 @@ export async function handleApi(
 
     for (const row of doomed) {
       const listed = await env.MEDIA.list({ prefix: `originals/${row.id}/`, limit: 10 })
+      const edited = await env.MEDIA.list({ prefix: `edited/${row.id}/`, limit: 1000 })
       await deleteObjects(env, [
         ...listed.objects.map((o) => o.key),
+        ...edited.objects.map((o) => o.key),
         row.original_key,
         keys.preview(row.id),
         keys.thumb(row.id),
+        row.edited_key,
+        row.edited_preview_key,
+        row.edited_thumb_key,
       ])
     }
     await photos.removeMany(env, doomed.map((r) => r.id))
@@ -630,6 +676,93 @@ export async function handleApi(
   }
 
   // ---------------------------------------------------------------- photos
+
+  // A rendered edit is versioned as one full image plus two browsing sizes.
+  // The revision is deliberately server-validated and only used below this
+  // photo's prefix, so a client can never choose an arbitrary R2 key.
+  const editedPart = /^\/api\/admin\/photos\/([0-9a-f-]+)\/edited\/([A-Za-z0-9_-]+)\/(full|preview|thumb)$/i.exec(path)
+  if (editedPart && method === 'PUT') {
+    const id = assertId(editedPart[1])
+    const revision = assertRevision(editedPart[2])
+    const kind = editedPart[3] as 'full' | 'preview' | 'thumb'
+    if (!(await photos.getById(env, id))) return error(404, 'Photo not found')
+    if (!request.body) return error(400, 'Empty body')
+
+    const declared = Number(request.headers.get('content-length') ?? '0')
+    const max = Number(env.MAX_UPLOAD_BYTES || '104857600')
+    if (declared > max) return error(413, `File exceeds the ${Math.round(max / 1048576)} MB limit`)
+    const type = (request.headers.get('content-type') ?? '').split(';')[0]?.trim().toLowerCase() ?? ''
+    if (!SAFE_IMAGE_RE.test(type)) return error(415, 'Edited files must be JPEG, PNG, WebP, or AVIF')
+    const buf = await request.arrayBuffer()
+    if (!buf.byteLength) return error(400, 'Empty body')
+    if (buf.byteLength > max) return error(413, `File exceeds the ${Math.round(max / 1048576)} MB limit`)
+    const key = kind === 'full'
+      ? keys.edited(id, revision)
+      : kind === 'preview'
+        ? keys.editedPreview(id, revision)
+        : keys.editedThumb(id, revision)
+    await putDerivative(env, key, buf, type)
+    return json({ ok: true, key })
+  }
+
+  const editedPhoto = /^\/api\/admin\/photos\/([0-9a-f-]+)\/edited$/i.exec(path)
+  if (editedPhoto && method === 'POST') {
+    const id = assertId(editedPhoto[1])
+    const current = await photos.getById(env, id)
+    if (!current) return error(404, 'Photo not found')
+    const body = (await request.json()) as Record<string, unknown>
+    const revision = assertRevision(body.revision)
+    const fullKey = keys.edited(id, revision)
+    const previewKey = keys.editedPreview(id, revision)
+    const thumbKey = keys.editedThumb(id, revision)
+    const [full, preview, thumb] = await Promise.all([
+      env.MEDIA.head(fullKey),
+      env.MEDIA.head(previewKey),
+      env.MEDIA.head(thumbKey),
+    ])
+    if (!full || !preview || !thumb) return error(409, 'The edited image is not fully uploaded yet')
+    const type = (full.httpMetadata?.contentType ?? '').toLowerCase()
+    if (!SAFE_IMAGE_RE.test(type)) return error(415, 'The edited image has an unsupported type')
+
+    const filename = safeFilename(str(body.filename, 200) || `edited-${id}.jpg`)
+    const updated = await photos.setEdited(env, id, {
+      key: fullKey,
+      previewKey,
+      thumbKey,
+      filename,
+      type,
+      size: full.size,
+      width: positiveDimension(body.width, 'width'),
+      height: positiveDimension(body.height, 'height'),
+    })
+    if (!updated) return error(404, 'Photo not found')
+
+    // Delete the previous immutable version only after the row points at the
+    // complete replacement. Readers therefore see either whole version.
+    await deleteObjects(env, [
+      current.edited_key !== fullKey ? current.edited_key : null,
+      current.edited_preview_key !== previewKey ? current.edited_preview_key : null,
+      current.edited_thumb_key !== thumbKey ? current.edited_thumb_key : null,
+    ])
+    const row = await photos.getById(env, id)
+    const [photo] = await publicPhotos(env, row ? [row] : [], true)
+    return json({ ok: true, photo })
+  }
+
+  if (editedPhoto && method === 'DELETE') {
+    const id = assertId(editedPhoto[1])
+    const current = await photos.getById(env, id)
+    if (!current) return error(404, 'Photo not found')
+    await photos.clearEdited(env, id)
+    const listed = await env.MEDIA.list({ prefix: `edited/${id}/`, limit: 1000 })
+    await deleteObjects(env, [
+      ...listed.objects.map((object) => object.key),
+      current.edited_key,
+      current.edited_preview_key,
+      current.edited_thumb_key,
+    ])
+    return json({ ok: true })
+  }
 
   // Stage 1-3: stream each part straight into R2.
   const part = /^\/api\/admin\/photos\/([0-9a-f-]+)\/(original|preview|thumb)$/i.exec(path)
@@ -733,11 +866,16 @@ export async function handleApi(
     // List rather than trust the row: this also purges the orphaned objects of
     // an upload that failed before its metadata was committed.
     const listed = await env.MEDIA.list({ prefix: `originals/${id}/`, limit: 10 })
+    const edited = await env.MEDIA.list({ prefix: `edited/${id}/`, limit: 1000 })
     await deleteObjects(env, [
       ...listed.objects.map((o) => o.key),
+      ...edited.objects.map((o) => o.key),
       row?.original_key ?? null,
       keys.preview(id),
       keys.thumb(id),
+      row?.edited_key ?? null,
+      row?.edited_preview_key ?? null,
+      row?.edited_thumb_key ?? null,
     ])
     if (row) await photos.remove(env, id)
     return json({ ok: true })

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 test.setTimeout(40_000);
 
 async function openPhoto(page: Page): Promise<void> {
-  await page.goto('/');
+  await page.goto('/studio');
   await page.waitForFunction(() => !!(window as any).__kloud);
   await page.evaluate(async () => {
     const rt = (window as any).__kloud;

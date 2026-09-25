@@ -1,27 +1,102 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
+    <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0e0e10" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#fafaf9" media="(prefers-color-scheme: light)" />
-    <title>KLOUD Studio</title>
+    <title>KLOUD.PHOTOGRAPHY</title>
+    <meta
+      name="description"
+      content="A photo archive. Open a folder to browse, then download the original file exactly as it was uploaded."
+    />
+    <meta name="theme-color" content="#0c0c0f" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f7f6f4" media="(prefers-color-scheme: light)" />
+    <meta property="og:title" content="KLOUD.PHOTOGRAPHY" />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;450;500;600;700&display=swap"
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
     />
-    <script>
-      // Apply the saved theme before first paint (same key the shell writes).
-      try {
-        var t = localStorage.getItem('kloud-theme');
-        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
-      } catch (e) {}
-    </script>
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <div class="app">
+      <!-- Window chrome: history, the path, and the tools that act on the view. -->
+      <header class="chrome">
+        <div class="chrome__history">
+          <button class="icon-btn" type="button" data-nav="back" title="Back" aria-label="Back" disabled></button>
+          <button class="icon-btn" type="button" data-nav="forward" title="Forward" aria-label="Forward" disabled></button>
+          <button class="icon-btn" type="button" data-nav="up" title="Parent folder" aria-label="Parent folder" disabled></button>
+        </div>
+
+        <nav class="crumbs" data-role="crumbs" aria-label="Current path"></nav>
+
+        <div class="chrome__tools">
+          <div class="search">
+            <span class="search__icon" data-icon="search" aria-hidden="true"></span>
+            <input
+              class="search__input"
+              type="search"
+              data-role="search"
+              placeholder="Search by name"
+              aria-label="Search by name"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </div>
+
+          <div class="seg" role="group" aria-label="View mode">
+            <button class="seg__btn" type="button" data-view="grid" title="Icon view" aria-label="Icon view"></button>
+            <button class="seg__btn" type="button" data-view="list" title="List view" aria-label="List view"></button>
+          </div>
+
+          <a class="icon-btn" href="/studio" data-role="studio" title="KLOUD Studio" aria-label="Open KLOUD Studio">
+            <span data-icon="pencil" aria-hidden="true"></span>
+          </a>
+          <button class="icon-btn" type="button" data-role="sort" title="Sort" aria-label="Sort"></button>
+          <button class="icon-btn" type="button" data-role="theme" title="Light or dark" aria-label="Light or dark"></button>
+          <button class="icon-btn" type="button" data-role="account" title="Admin" aria-label="Admin"></button>
+          <button class="icon-btn chrome__drawer" type="button" data-role="drawer" title="Folder list" aria-label="Folder list"></button>
+        </div>
+      </header>
+
+      <div class="body">
+        <aside class="sidebar" data-role="sidebar" aria-label="Folder tree">
+          <a class="wordmark" href="/" data-link>
+            <span class="wordmark__k">KLOUD</span>
+            <span class="wordmark__rest">.PHOTOGRAPHY</span>
+          </a>
+          <nav class="tree" data-role="tree"></nav>
+          <div class="sidebar__foot" data-role="totals"></div>
+        </aside>
+
+        <div class="scrim" data-role="scrim" hidden></div>
+
+        <main class="pane" data-role="pane" tabindex="-1">
+          <div class="pane__inner" data-role="content">
+            <p class="state">Opening</p>
+          </div>
+        </main>
+      </div>
+
+      <footer class="statusbar" data-role="status"></footer>
+    </div>
+
+    <div class="dropzone" data-role="dropzone" hidden>
+      <div class="dropzone__card">
+        <span data-icon="upload" aria-hidden="true"></span>
+        <p class="dropzone__title">Drop to upload</p>
+        <p class="dropzone__where" data-role="dropwhere"></p>
+      </div>
+    </div>
+
+    <div class="lightbox" data-role="lightbox" hidden></div>
+    <div class="menu" data-role="menu" hidden></div>
+    <div class="sheet" data-role="sheet" hidden></div>
+    <div class="transfers" data-role="transfers" hidden></div>
+    <div class="toasts" data-role="toasts" aria-live="polite"></div>
+
+    <script type="module" src="/gallery/src/main.ts"></script>
   </body>
 </html>

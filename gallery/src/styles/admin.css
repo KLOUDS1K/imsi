@@ -1,0 +1,350 @@
+/* The upload panel. Everything else management does borrows the base sheet. */
+
+.transfers {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 92;
+  width: min(340px, calc(100vw - 36px));
+  max-height: min(52dvh, 420px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel-blur);
+  backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: var(--shadow-2);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.2s var(--ease), transform 0.2s var(--ease);
+  overflow: hidden;
+}
+.transfers.is-open {
+  opacity: 1;
+  transform: none;
+}
+
+.transfers__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 8px 9px 13px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.transfers__head {
+  font-size: 12.5px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+.transfers__close {
+  width: 26px;
+  height: 26px;
+  padding: 6px;
+}
+
+.transfers__list {
+  overflow-y: auto;
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+}
+
+.transfer {
+  display: grid;
+  gap: 6px;
+  padding: 8px 8px 10px;
+  border-radius: var(--r-xs);
+}
+.transfer:hover {
+  background: var(--hover);
+}
+.transfer__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.transfer__name {
+  min-width: 0;
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.transfer__status {
+  flex: none;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.transfer.is-failed .transfer__status {
+  color: var(--danger);
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transfer__track {
+  height: 3px;
+  border-radius: 99px;
+  background: var(--line);
+  overflow: hidden;
+}
+.transfer__fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent);
+  transition: width 0.2s linear;
+}
+.transfer[data-stage='done'] .transfer__fill {
+  background: var(--accent);
+  opacity: 0.45;
+}
+.transfer.is-failed .transfer__fill {
+  background: var(--danger);
+}
+
+/* Indeterminate: the derivative pass and the metadata commit have no ratio. */
+.transfer__fill.is-indeterminate {
+  width: 38% !important;
+  animation: transfer-sweep 1.1s var(--ease) infinite;
+}
+@keyframes transfer-sweep {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+/*
+ * Centred toasts meet the transfer panel in the bottom-right corner once the
+ * window is narrower than about 1140px. Rather than let one cover the other,
+ * centre the toasts in the space the open panel leaves to its left; on a wide
+ * screen they stay dead centre.
+ */
+@media (min-width: 621px) and (max-width: 1140px) {
+  .transfers:not([hidden]) ~ .toasts {
+    right: calc(18px + 340px + 14px);
+  }
+}
+
+@media (max-width: 620px) {
+  .transfers {
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    width: auto;
+  }
+  /*
+   * Toasts share the bottom edge on a phone, so they sit just above the panel.
+   * --transfers-h is its measured height (see transfers.ts); the fallback is
+   * the largest it can be, for a browser without ResizeObserver.
+   */
+  .transfers:not([hidden]) ~ .toasts {
+    bottom: calc(12px + var(--transfers-h, min(52dvh, 420px)) + 10px);
+  }
+}
+
+/* ------------------------------------------------------------------- stats */
+
+.stats__tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 34px;
+}
+.stat {
+  display: grid;
+  gap: 3px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-elev);
+}
+.stat__label {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.stat__value {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.stat__note {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.chart {
+  margin-bottom: 34px;
+}
+.chart__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.chart__legend {
+  display: flex;
+  gap: 14px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.chart__key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.chart__key::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+.chart__key--visits::before {
+  background: var(--accent);
+}
+.chart__key--downloads::before {
+  background: var(--ink-3);
+}
+
+.chart__plot {
+  height: 150px;
+  padding: 10px 12px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-elev);
+}
+.chart__plot svg {
+  width: 100%;
+  height: 100%;
+}
+.chart__axis {
+  stroke: var(--line);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.chart__visits {
+  fill: var(--accent);
+}
+.chart__downloads {
+  fill: var(--ink-3);
+}
+.chart__scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 7px;
+  font-size: 11px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats__lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 30px;
+}
+.stats__lists .section + .section {
+  margin-top: 0;
+}
+
+.ranks {
+  display: grid;
+  gap: 1px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+  background: var(--bg-elev);
+}
+.rank {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.rank:last-child {
+  border-bottom: 0;
+}
+.rank__n {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.rank__name {
+  display: grid;
+  min-width: 0;
+}
+.rank__title {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rank__sub {
+  font-size: 11px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rank__value {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ranks__empty {
+  padding: 16px 4px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.stats__foot {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 78ch;
+  margin-top: 32px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+.stats__foot-icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-top: 2px;
+}
+
+/* A long archive has to be interruptible. */
+.transfer__stop {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 4px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.transfer__stop:hover {
+  background: var(--hover);
+  color: var(--ink);
+}

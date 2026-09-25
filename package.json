@@ -1,14 +1,18 @@
 {
-  "name": "kloud-web-lightroom",
+  "name": "kloud-photo-platform",
   "private": true,
   "version": "0.1.0",
-  "description": "KLOUD web photo editor prototype (Lightroom-style, non-destructive, WebGL2).",
+  "description": "KLOUD.PHOTOGRAPHY archive with an integrated non-destructive WebGL2 photo studio.",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.node.json && tsc -p tsconfig.tests.json",
+    "preview": "npm run build && wrangler dev",
+    "preview:static": "vite preview",
+    "deploy": "npm run build && wrangler deploy",
+    "db:local": "wrangler d1 migrations apply kloudphoto --local",
+    "db:remote": "wrangler d1 migrations apply kloudphoto --remote",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.node.json && tsc -p tsconfig.tests.json && tsc --noEmit -p tsconfig.worker.json",
     "test:e2e": "playwright test",
     "test": "vitest run"
   },
@@ -19,11 +23,16 @@
     "utif": "^3.1.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260820.1",
     "@playwright/test": "^1.63.0",
     "@types/node": "^22.20.4",
     "fake-indexeddb": "^6.2.5",
     "typescript": "^5.9.3",
     "vite": "^8.3.0",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.1",
+    "wrangler": "^4.42.0"
+  },
+  "allowScripts": {
+    "workerd@1.20260820.1": true
   }
 }

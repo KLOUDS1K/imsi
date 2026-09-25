@@ -1,13 +1,22 @@
-# KLOUD Studio
+# KLOUD Photo Platform
 
-kloud.photography용 웹 사진 편집기 프로토타입입니다. Lightroom처럼 원본을 건드리지 않는 비파괴 편집 방식입니다. 모든 처리는 브라우저 안(WebGL2, Web Worker, IndexedDB)에서 이루어지고, 사진이 서버로 전송되지 않습니다.
+`kloud.photography` 원본 사진 아카이브와 Lightroom 스타일의 KLOUD Studio를 한 프로젝트로 통합했습니다. 갤러리·관리·업로드는 기존 Cloudflare Worker/D1/R2 구조를 그대로 사용하고, 편집은 브라우저 안(WebGL2, Web Worker, IndexedDB)에서 비파괴 방식으로 처리합니다.
+
+- `/` 및 `/f/<id>`: 기존 사진 아카이브
+- `/studio`: KLOUD Studio
+- 사진 뷰어의 **Edit**: 서명된 원본을 Studio에 자동으로 불러와 Develop 화면으로 이동
+- Studio의 **← Photos**: 기존 사진 화면으로 복귀
+
+Studio는 라우트 단위로 지연 로딩되므로 일반 방문자는 편집기 코드와 LibRaw WASM을 내려받지 않습니다. 원본 사진은 같은 출처에서 브라우저로 전달되며 편집을 위해 별도 서버에 재전송되지 않습니다.
 
 ## 실행
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173
-npm run build      # dist/ — 어느 하위 경로에 올려도 동작 (base: './')
+npm run dev        # 클라이언트: http://localhost:5173
+npm run preview    # 빌드 후 Cloudflare Worker 로컬 실행
+npm run build      # Cloudflare Assets용 dist/client 생성
+npm run deploy     # 기존 kloudphoto Worker로 배포
 npm run typecheck  # 앱, 설정 파일, 테스트 코드까지 전부 검사
 npm test           # 단위 테스트 (vitest)
 npx playwright install chromium # 최초 1회, 테스트용 브라우저 설치
@@ -35,7 +44,16 @@ GitHub의 `Editor checks` 워크플로가 타입 검사, 단위 테스트, 빌�
 - **보기**: `\` 전후 비교, `Y` 비교 레이아웃 전환(분할, 나란히, 기준 사진), `Z` 100% 확대(확대하면 원본 해상도로 다시 렌더링), `J` 클리핑 경고, `?` 단축키 목록.
 - **성능**: 조작 중에는 저해상도 초안으로 먼저 그리고, 손을 떼면 고화질로 다시 그립니다. 앞 단계(현상, 디테일, 마스크) 결과를 캐시해서 효과나 자르기만 바꿀 때는 뒷부분만 다시 계산합니다.
 
-## 사이트에 붙이기
+## 원본 사이트 통합 구조
+
+- `gallery/src`: 기존 KLOUD.PHOTOGRAPHY 클라이언트
+- `worker`, `migrations`, `wrangler.jsonc`: 기존 Cloudflare 백엔드
+- `src/app`, `src/editor`, `src/ui`: KLOUD Studio
+- `gallery/src/app/studio.ts`: 갤러리와 Studio 사이의 라우트·원본 전달 브리지
+
+`.wrangler/`, `.dev.vars`, `.setup-key.txt`, 로컬 D1/R2 데이터는 Git에서 제외됩니다.
+
+## 다른 화면에 편집기 붙이기
 
 편집기는 특정 프레임워크에 묶여 있지 않습니다. DOM 요소 하나에 마운트합니다.
 

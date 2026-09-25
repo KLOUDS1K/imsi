@@ -1,20 +1,31 @@
 import { defineConfig } from 'vite';
 import { fileURLToPath, URL } from 'node:url';
+import { resolve } from 'node:path';
 
-// base: './' keeps the build relocatable, so the dist/ folder can be dropped
-// under any sub-path of kloud.photography (e.g. /editor/) without rewrites.
 export default defineConfig({
-  base: './',
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   worker: { format: 'es' },
   optimizeDeps: { exclude: ['libraw-wasm'] },
   build: {
+    outDir: 'dist/client',
+    emptyOutDir: true,
     target: 'es2022',
     sourcemap: true,
     chunkSizeWarningLimit: 2000,
+    rollupOptions: {
+      input: { index: resolve(import.meta.dirname, 'index.html') },
+    },
   },
-  server: { host: true, port: 5173 },
+  server: {
+    host: true,
+    port: 5173,
+    proxy: {
+      '/api': 'http://127.0.0.1:8787',
+      '/media': 'http://127.0.0.1:8787',
+      '/download': 'http://127.0.0.1:8787',
+    },
+  },
   preview: { host: true, port: 4173 },
 });

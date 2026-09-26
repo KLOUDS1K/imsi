@@ -281,11 +281,11 @@ export interface NoiseParams {
   colorDetail: number;
   /** 0..100, default 50 */
   colorSmoothness: number;
-  /** Heavier edge-aware denoiser ("AI Denoise"). */
+  /** Heavier multi-scale edge-aware denoiser (stored under the legacy AI key). */
   aiDenoise: boolean;
   /** 0..100, default 50 */
   aiDenoiseStrength: number;
-  /** 0..100, default 50 — how much fine detail the AI denoiser keeps. */
+  /** 0..100, default 50 — how much fine detail the smart denoiser keeps. */
   detailPreservation: number;
 }
 

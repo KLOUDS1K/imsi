@@ -1,7 +1,17 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 
 const PHOTO_ID = '11111111-1111-4111-8111-111111111111';
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+
+test('first paint shows the branded boot shell instead of raw controls', async ({ page }) => {
+  const html = readFileSync('index.html', 'utf8').replace(/<script type="module"[\s\S]*?<\/script>/, '');
+  await page.setContent(html);
+  await expect(page.locator('.boot-splash__mark')).toHaveText('KLOUD.PHOTOGRAPHY');
+  await expect(page.locator('.boot-splash')).toBeVisible();
+  expect(await page.locator('.app').evaluate((node) => getComputedStyle(node).visibility)).toBe('hidden');
+  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+});
 
 test('gallery opens a stored original directly in Studio', async ({ page }) => {
   const photo = {
@@ -116,9 +126,12 @@ test('lightbox prefers edits, switches versions, exposes both downloads, and zoo
 
   const figure = page.locator('.viewer__figure');
   await figure.click({ position: { x: 0, y: 0 } });
-  await expect(page.locator('.viewer__stage')).toHaveClass(/is-zoomed/);
+  const stage = page.locator('.viewer__stage');
+  await expect(stage).toHaveClass(/is-zoomed/);
   const beforeWheel = await figure.evaluate((node) => getComputedStyle(node).transform);
-  await figure.hover({ position: { x: 0, y: 0 } });
+  // Once zoomed, the stage intentionally owns wheel/pan input and sits above
+  // the transformed figure. Move over that real input surface.
+  await stage.hover({ position: { x: 8, y: 8 } });
   await page.mouse.wheel(0, -200);
   const afterWheel = await figure.evaluate((node) => getComputedStyle(node).transform);
   expect(afterWheel).not.toBe(beforeWheel);

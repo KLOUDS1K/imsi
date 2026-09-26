@@ -1,17 +1,18 @@
 /**
  * DETAIL stage (display-referred, sRGB-encoded float in → out, source space):
  *
- *   1. fx-detail-ai-denoise     non-local means (skipInDraft)
- *   2. fx-detail-color-nr       edge-aware chroma smoothing
- *   3. fx-detail-luma-nr        cross-bilateral luma NR
- *   4. fx-detail-luma-contrast  restores the local contrast NR flattened
- *   5. fx-detail-sharpen        unsharp mask on luma (detail + edge masking)
+ *   1. fx-detail-ai-denoise     fine edge-aware à-trous pass (skipInDraft)
+ *   2. fx-detail-ai-denoise-2   coarse edge-aware à-trous pass (skipInDraft)
+ *   3. fx-detail-color-nr       edge-aware chroma smoothing
+ *   4. fx-detail-luma-nr        cross-bilateral luma NR
+ *   5. fx-detail-luma-contrast  restores the local contrast NR flattened
+ *   6. fx-detail-sharpen        unsharp mask on luma (detail + edge masking)
  *
  * Every pass is an exact identity (and reports isIdentity) at default JPEG
  * settings. Radii are authored in REFERENCE px and multiplied by ctx.scale.
  *
- * Alpha: source-space alpha carries no meaning. Pass 3 temporarily stores the
- * pre-NR luma in .a for pass 4 (which blurs the NR residual and restores
+ * Alpha: source-space alpha carries no meaning. Pass 4 temporarily stores the
+ * pre-NR luma in .a for pass 5 (which blurs the NR residual and restores
  * .a = 1); both use the same predicate, so they always run together.
  *
  * Luma/chroma split: luma Y = Rec.709 weights on the ENCODED values;
@@ -26,75 +27,106 @@ const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /* ------------------------------------------------------------------ */
-/* 1. AI denoise — non-local means                                     */
+/* 1–2. Smart denoise — multi-scale edge-aware à-trous filtering       */
 /* ------------------------------------------------------------------ */
 
-const NLM_GLSL = /* glsl */ `
+const SMART_DENOISE_GLSL = /* glsl */ `
 uniform sampler2D uInput;
-uniform float uNlmH;        // filtering strength (encoded units)
-uniform int uNlmRadius;     // search radius, px (≤ 5)
-uniform float uNlmPreserve; // 0..1
+uniform sampler2D uSmartGuide;
+uniform float uSmartStep;      // à-trous spacing in source px
+uniform float uSmartMix;       // pass strength
+uniform float uSmartSigmaY;    // luma edge threshold
+uniform float uSmartSigmaC;    // chroma edge threshold
+uniform float uSmartFloorY;    // expected fine luma noise
+uniform float uSmartFloorC;    // expected fine chroma noise
+uniform float uSmartPreserve;  // 0..1 texture preservation
 
-// Patch = plus-shaped 5 taps; distance weighted like luma but keeping chroma.
-const vec3 NLM_W = vec3(0.3, 0.5, 0.2);
+float kernel5(int i) {
+  if (i == -2 || i == 2) return 0.0625;
+  if (i == -1 || i == 1) return 0.25;
+  return 0.375;
+}
 
 void main() {
-  ivec2 pix = ivec2(floor(vUv * vec2(textureSize(uInput, 0))));
+  vec2 texel = 1.0 / vec2(textureSize(uInput, 0));
+  ivec2 pix = ivec2(floor(vUv / texel));
   vec4 c0 = texelFetch(uInput, pix, 0);
-  vec3 p0 = c0.rgb;
-  vec3 p1 = fetchClamped(uInput, pix + ivec2(1, 0)).rgb;
-  vec3 p2 = fetchClamped(uInput, pix + ivec2(-1, 0)).rgb;
-  vec3 p3 = fetchClamped(uInput, pix + ivec2(0, 1)).rgb;
-  vec3 p4 = fetchClamped(uInput, pix + ivec2(0, -1)).rgb;
-  // Display-referred noise is fairly uniform, somewhat stronger in the shadows.
-  float y = clamp(luma(p0), 0.0, 1.0);
-  float h = uNlmH * (1.0 + 0.6 * (1.0 - y) * (1.0 - y));
-  float invH2 = 1.0 / (h * h);
-  vec3 acc = vec3(0.0);
+  vec3 g0rgb = texture(uSmartGuide, vUv).rgb;
+  float g0y = luma(g0rgb);
+  vec3 g0c = g0rgb - g0y;
+  float invY = 0.5 / max(1e-6, uSmartSigmaY * uSmartSigmaY);
+  float invC = 0.5 / max(1e-6, uSmartSigmaC * uSmartSigmaC);
+  float accY = 0.0;
+  vec3 accC = vec3(0.0);
   float wsum = 0.0;
-  float wmax = 0.0;
-  for (int dy = -5; dy <= 5; dy++) {
-    if (dy < -uNlmRadius || dy > uNlmRadius) continue;
-    for (int dx = -5; dx <= 5; dx++) {
-      if (dx < -uNlmRadius || dx > uNlmRadius || (dx == 0 && dy == 0)) continue;
-      ivec2 q = pix + ivec2(dx, dy);
-      vec3 q0 = fetchClamped(uInput, q).rgb;
-      vec3 e0 = p0 - q0;
-      vec3 e1 = p1 - fetchClamped(uInput, q + ivec2(1, 0)).rgb;
-      vec3 e2 = p2 - fetchClamped(uInput, q + ivec2(-1, 0)).rgb;
-      vec3 e3 = p3 - fetchClamped(uInput, q + ivec2(0, 1)).rgb;
-      vec3 e4 = p4 - fetchClamped(uInput, q + ivec2(0, -1)).rgb;
-      float dist = dot(e0 * e0 + e1 * e1 + e2 * e2 + e3 * e3 + e4 * e4, NLM_W) * 0.2;
-      float w = exp(-dist * invH2);
-      acc += w * q0;
+  for (int j = -2; j <= 2; j++) {
+    for (int i = -2; i <= 2; i++) {
+      vec2 uv = vUv + vec2(float(i), float(j)) * uSmartStep * texel;
+      vec3 guide = texture(uSmartGuide, uv).rgb;
+      float gy = luma(guide);
+      vec3 gc = guide - gy;
+      float dy = gy - g0y;
+      vec3 dc = gc - g0c;
+      float w = kernel5(i) * kernel5(j) * exp(-dy * dy * invY - dot(dc, dc) * invC);
+      vec3 sampleRgb = texture(uInput, uv).rgb;
+      float sy = luma(sampleRgb);
+      accY += w * sy;
+      accC += w * (sampleRgb - sy);
       wsum += w;
-      wmax = max(wmax, w);
     }
   }
-  // Standard NLM trick: the centre gets the best neighbour weight instead of 1.
-  float wc = max(wmax, 1e-4);
-  vec3 den = (acc + wc * p0) / (wsum + wc);
-  // Detail preservation: return residual detail that is clearly above the
-  // noise level (soft coring), plus a little of everything for a natural look.
-  vec3 r = p0 - den;
-  float keep = uNlmPreserve * (0.15 + 0.85 * smoothstep(0.7 * h, 2.5 * h, abs(luma(r))));
-  outColor = vec4(den + r * keep, c0.a);
+  float y0 = luma(c0.rgb);
+  vec3 c0c = c0.rgb - y0;
+  float denY = accY / max(wsum, 1e-6);
+  vec3 denC = accC / max(wsum, 1e-6);
+
+  // The à-trous residual is a wavelet detail band. Soft coring removes values
+  // compatible with noise while returning stronger texture and real edges.
+  float shadow = 1.0 + 0.7 * pow(1.0 - clamp(y0, 0.0, 1.0), 2.0);
+  float ry = y0 - denY;
+  vec3 rc = c0c - denC;
+  float signalY = smoothstep(0.65 * uSmartFloorY * shadow, 2.6 * uSmartFloorY * shadow, abs(ry));
+  float signalC = smoothstep(0.65 * uSmartFloorC * shadow, 2.8 * uSmartFloorC * shadow, length(rc));
+  float keepY = uSmartPreserve * (0.12 + 0.88 * signalY);
+  float keepC = uSmartPreserve * (0.05 + 0.55 * signalC);
+  vec3 filtered = (denY + ry * keepY) + (denC + rc * keepC);
+  outColor = vec4(mix(c0.rgb, filtered, uSmartMix), c0.a);
 }
 `;
 
+function smartDenoiseUniforms(params: EditParams, ctx: PassContext, coarse: boolean): Record<string, number> {
+  const s = clamp01(params.noise.aiDenoiseStrength / 100);
+  const preserve = clamp01(params.noise.detailPreservation / 100);
+  const scale = Math.max(0.6, ctx.scale);
+  const coarseAmount = clamp01((s - 0.18) / 0.82);
+  return {
+    uSmartStep: (coarse ? 2 : 1) * scale,
+    uSmartMix: coarse ? 0.78 * coarseAmount : Math.min(1, 0.25 + 1.05 * s),
+    uSmartSigmaY: (coarse ? 0.035 : 0.022) + (coarse ? 0.15 : 0.105) * s,
+    uSmartSigmaC: (coarse ? 0.06 : 0.04) + (coarse ? 0.24 : 0.17) * s,
+    uSmartFloorY: (coarse ? 0.007 : 0.005) + (coarse ? 0.04 : 0.027) * s,
+    uSmartFloorC: (coarse ? 0.01 : 0.008) + (coarse ? 0.06 : 0.042) * s,
+    uSmartPreserve: preserve,
+  };
+}
+
 const AI_DENOISE_PASS: PassDef = {
   name: 'fx-detail-ai-denoise',
-  fragment: fragment(GLSL_SAMPLING, NLM_GLSL),
+  fragment: fragment(SMART_DENOISE_GLSL),
   inputs: ['uInput'],
+  blurs: [{ uniform: 'uSmartGuide', source: 'uInput', sigma: () => 0.65 }],
   skipInDraft: true,
-  uniforms(params) {
-    const s = clamp01(params.noise.aiDenoiseStrength / 100);
-    return {
-      uNlmH: lerp(0.012, 0.085, s),
-      uNlmRadius: s < 0.34 ? 3 : s < 0.67 ? 4 : 5,
-      uNlmPreserve: clamp01(params.noise.detailPreservation / 100),
-    };
-  },
+  uniforms: (params, ctx) => smartDenoiseUniforms(params, ctx, false),
+  isIdentity: (p) => !p.noise.aiDenoise || !(p.noise.aiDenoiseStrength > 0),
+};
+
+const AI_DENOISE_COARSE_PASS: PassDef = {
+  name: 'fx-detail-ai-denoise-2',
+  fragment: fragment(SMART_DENOISE_GLSL),
+  inputs: ['uInput'],
+  blurs: [{ uniform: 'uSmartGuide', source: 'uInput', sigma: () => 1.1 }],
+  skipInDraft: true,
+  uniforms: (params, ctx) => smartDenoiseUniforms(params, ctx, true),
   isIdentity: (p) => !p.noise.aiDenoise || !(p.noise.aiDenoiseStrength > 0),
 };
 
@@ -338,10 +370,11 @@ const SHARPEN_PASS: PassDef = {
 };
 
 /** Display-referred DETAIL stage, in order. */
-export const DETAIL_STAGE: PassDef[] = [AI_DENOISE_PASS, COLOR_NR_PASS, LUMA_NR_PASS, LUMA_CONTRAST_PASS, SHARPEN_PASS];
+export const DETAIL_STAGE: PassDef[] = [AI_DENOISE_PASS, AI_DENOISE_COARSE_PASS, COLOR_NR_PASS, LUMA_NR_PASS, LUMA_CONTRAST_PASS, SHARPEN_PASS];
 
 export {
   AI_DENOISE_PASS,
+  AI_DENOISE_COARSE_PASS,
   COLOR_NR_PASS,
   LUMA_NR_PASS,
   LUMA_CONTRAST_PASS,

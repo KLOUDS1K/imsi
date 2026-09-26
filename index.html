@@ -19,8 +19,52 @@
       href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;450;500;600;700&display=swap"
       rel="stylesheet"
     />
+    <!--
+      The gallery stylesheet belongs to a route-level chunk, so it arrives
+      after the initial HTML. Keep the browser from painting the raw controls
+      during that gap. This tiny shell is deliberately inline: it is the only
+      style guaranteed to be present for the very first paint.
+    -->
+    <style id="boot-style">
+      :root { color-scheme: light dark; --boot-bg: #f5f4f1; --boot-ink: #17161a; --boot-muted: #8d8983; }
+      @media (prefers-color-scheme: dark) {
+        :root { --boot-bg: #0c0c0f; --boot-ink: #f1f0ee; --boot-muted: #6f6c67; }
+      }
+      :root[data-theme="light"] { --boot-bg: #f5f4f1; --boot-ink: #17161a; --boot-muted: #8d8983; }
+      :root[data-theme="dark"] { --boot-bg: #0c0c0f; --boot-ink: #f1f0ee; --boot-muted: #6f6c67; }
+      html, body { width: 100%; height: 100%; margin: 0; background: var(--boot-bg); }
+      .boot-splash {
+        position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center;
+        background: var(--boot-bg); color: var(--boot-ink);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        transition: opacity 140ms ease, visibility 140ms ease;
+      }
+      .boot-splash__inner { display: grid; justify-items: center; gap: 12px; }
+      .boot-splash__mark { font-size: 14px; font-weight: 600; letter-spacing: .035em; }
+      .boot-splash__line {
+        width: 64px; height: 1px; overflow: hidden; background: color-mix(in srgb, var(--boot-muted) 24%, transparent);
+      }
+      .boot-splash__line::after {
+        content: ""; display: block; width: 45%; height: 100%; background: var(--boot-muted);
+        animation: boot-slide 950ms ease-in-out infinite alternate;
+      }
+      @keyframes boot-slide { from { transform: translateX(-100%); } to { transform: translateX(225%); } }
+      html:not(.app-ready) > body > :not(.boot-splash):not(noscript) { visibility: hidden; }
+      html.app-ready .boot-splash { opacity: 0; visibility: hidden; pointer-events: none; }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-splash { transition: none; }
+        .boot-splash__line::after { animation: none; transform: translateX(60%); }
+      }
+    </style>
   </head>
   <body>
+    <div class="boot-splash" role="status" aria-label="Opening KLOUD.PHOTOGRAPHY">
+      <div class="boot-splash__inner">
+        <span class="boot-splash__mark">KLOUD.PHOTOGRAPHY</span>
+        <span class="boot-splash__line" aria-hidden="true"></span>
+      </div>
+    </div>
+    <noscript>This site needs JavaScript to browse and edit photos.</noscript>
     <div class="app">
       <!-- Window chrome: history, the path, and the tools that act on the view. -->
       <header class="chrome">

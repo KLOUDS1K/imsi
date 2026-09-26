@@ -145,13 +145,16 @@ describe('fx passes: identity at defaults', () => {
     expect(GEOMETRY_PASS.isIdentity?.(rot, ctx())).toBe(false);
   });
 
-  it('AI denoise only runs when enabled, and never in draft', () => {
-    const ai = DETAIL_STAGE.find((d) => d.name === 'fx-detail-ai-denoise')!;
+  it('smart denoise passes only run when enabled, and never in draft', () => {
+    const smart = DETAIL_STAGE.filter((d) => d.name.startsWith('fx-detail-ai-denoise'));
+    expect(smart).toHaveLength(2);
     const p = createDefaultParams();
-    expect(ai.isIdentity?.(p, ctx())).toBe(true);
+    for (const pass of smart) expect(pass.isIdentity?.(p, ctx())).toBe(true);
     p.noise.aiDenoise = true;
-    expect(ai.isIdentity?.(p, ctx())).toBe(false);
-    expect(ai.skipInDraft).toBe(true);
+    for (const pass of smart) {
+      expect(pass.isIdentity?.(p, ctx())).toBe(false);
+      expect(pass.skipInDraft).toBe(true);
+    }
   });
 
   it('luma NR and its contrast restore agree on when the residual is carried in alpha', () => {

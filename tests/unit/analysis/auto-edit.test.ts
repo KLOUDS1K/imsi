@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeImage, classifyScene, generateAutoEdit } from '@/editor/analysis';
+import { analyzeImage, classifyScene, generateAutoEdit, recommendNoiseReduction } from '@/editor/analysis';
 import type { PhotoMeta, PixelBuffer } from '@/editor/types';
 
 /** Linear RGBA scene: a flat base level with deterministic grain and a few bright points. */
@@ -71,5 +71,27 @@ describe('AI Auto Edit exposure handling', () => {
     const px = skinDisc(scene(256, 170, 0.18), 128, 80, 26, 34);
     const a = analyzeImage(px, meta({ iso: 200, shutter: 1 / 250 }));
     expect(a.scene.label).toBe('portrait');
+  });
+});
+
+describe('automatic noise reduction', () => {
+  it('keeps clean photos on the lightweight filters', () => {
+    const p = recommendNoiseReduction(12);
+    expect(p.aiDenoise).toBe(false);
+    expect(p.luminance).toBe(0);
+    expect(p.color).toBeGreaterThan(0);
+  });
+
+  it('uses smart denoise without stacking excessive manual luma NR', () => {
+    const p = recommendNoiseReduction(84);
+    expect(p.aiDenoise).toBe(true);
+    expect(p.aiDenoiseStrength).toBeGreaterThan(60);
+    expect(p.luminance).toBeLessThan(20);
+    expect(p.detailPreservation).toBeGreaterThanOrEqual(45);
+  });
+
+  it('clamps invalid and out-of-range measurements', () => {
+    expect(recommendNoiseReduction(Number.NaN)).toEqual(recommendNoiseReduction(0));
+    expect(recommendNoiseReduction(200)).toEqual(recommendNoiseReduction(100));
   });
 });

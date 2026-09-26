@@ -34,7 +34,7 @@ function identityDefaults() {
     if (force) forcedDiff = maxAbsDiff(runner.read(runner.run(pass, { uInput: src, uOverlay: src }, p, ctx, extra, true)), img.data);
     result[pass.name] = { identity, forcedDiff };
   };
-  for (const pass of DETAIL_STAGE) check(pass, undefined, pass.name !== 'fx-detail-ai-denoise');
+  for (const pass of DETAIL_STAGE) check(pass, undefined, !pass.name.startsWith('fx-detail-ai-denoise'));
   for (const pass of EFFECTS_STAGE) check(pass);
   check(HEAL_PASS, { spots: [] });
   check(GEOMETRY_PASS);

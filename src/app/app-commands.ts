@@ -8,14 +8,16 @@ import type { AppRuntime } from './createContext';
 export function registerAppCommands(rt: AppRuntime): () => void {
   const { ctx, docs } = rt;
   const inDevelop = (): boolean => ctx.module.value === 'develop' && !!ctx.doc.value;
-  const noGesture = (): boolean => !ctx.doc.value?.store.gestureActive;
   const offs = [
     ctx.commands.register({
       id: 'history.undo',
       label: 'Undo',
       keys: ['Mod+Z'],
       group: 'Edit',
-      when: () => inDevelop() && noGesture(),
+      // EditorStore.undo() closes an in-progress gesture before moving through
+      // history. Keeping the shortcut enabled also recovers cleanly when a
+      // browser drops pointerup/lostpointercapture during a long-running tool.
+      when: inDevelop,
       run: () => {
         if (!ctx.doc.value?.store.undo()) ctx.toast('Nothing to undo', 'info', 1400);
       },
@@ -25,7 +27,7 @@ export function registerAppCommands(rt: AppRuntime): () => void {
       label: 'Redo',
       keys: ['Shift+Mod+Z', 'Mod+Y'],
       group: 'Edit',
-      when: () => inDevelop() && noGesture(),
+      when: inDevelop,
       run: () => {
         if (!ctx.doc.value?.store.redo()) ctx.toast('Nothing to redo', 'info', 1400);
       },

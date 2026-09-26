@@ -28,6 +28,11 @@ import '../styles/viewer.css'
 import '../styles/admin.css'
 import '../styles/motion.css'
 
+// Static HTML is intentionally hidden by the inline first-paint shell until
+// this route's CSS chunk has loaded and evaluated. Reveal before network data
+// arrives so the styled "Opening" state remains responsive on slow links.
+document.documentElement.classList.add('app-ready')
+
 /** Pulled in only once a session exists, so a visitor never downloads it. */
 let adminLoading: Promise<void> | null = null
 

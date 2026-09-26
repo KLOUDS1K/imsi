@@ -286,6 +286,27 @@ test.describe.serial('KLOUD Studio', () => {
     await expect.poll(() => k(page, (rt) => rt.ctx.view.value.zoom)).toBe('fit');
   });
 
+  test('mouse wheel zooms at the pointer and drag pans the zoomed photo', async () => {
+    const stage = page.locator('.k-viewer__stage');
+    const box = await stage.boundingBox();
+    expect(box).not.toBeNull();
+    const x = box!.x + box!.width * 0.28;
+    const y = box!.y + box!.height * 0.34;
+    await page.mouse.move(x, y);
+    await page.mouse.wheel(0, -120);
+    await expect.poll(() => k(page, (rt) => rt.ctx.view.value.zoom)).not.toBe('fit');
+    const anchored = await k(page, (rt) => rt.ctx.view.value.center);
+    expect(Math.abs(anchored.x - 0.5) + Math.abs(anchored.y - 0.5)).toBeGreaterThan(0.005);
+
+    await page.mouse.down();
+    await page.mouse.move(x + 70, y + 45, { steps: 5 });
+    await page.mouse.up();
+    const panned = await k(page, (rt) => rt.ctx.view.value.center);
+    expect(Math.abs(panned.x - anchored.x) + Math.abs(panned.y - anchored.y)).toBeGreaterThan(0.002);
+    await page.keyboard.press('z');
+    await expect.poll(() => k(page, (rt) => rt.ctx.view.value.zoom)).toBe('fit');
+  });
+
   test('snapshot from the develop menu', async () => {
     await page.getByRole('button', { name: 'Develop actions' }).click();
     await page.getByRole('menuitem', { name: /New snapshot/ }).click();

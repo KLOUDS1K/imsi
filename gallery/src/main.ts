@@ -3,6 +3,7 @@ const studio = window.location.pathname.replace(/\/+$/, '') === '/studio'
 
 const fail = (error: unknown) => {
   console.error(error)
+  document.documentElement.classList.add('app-ready')
   document.body.textContent = 'The page could not start. Please reload.'
 }
 

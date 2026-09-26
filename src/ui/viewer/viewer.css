@@ -299,3 +299,48 @@
 .k-loupe.is-on {
   display: block;
 }
+
+/* Mobile viewer controls stay deliberately small in number: original preview
+   and clipping/zoom remain one tap away; advanced compare modes still live in
+   the top Before/After action without stealing photo height. */
+.k-app[data-layout='phone'][data-module='develop'] .k-vbar {
+  min-height: 48px;
+  gap: 4px;
+  padding: 4px max(8px, env(safe-area-inset-right)) 4px max(8px, env(safe-area-inset-left));
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+}
+
+.k-app[data-layout='phone'][data-module='develop'] .k-vbar__group--compare .k-seg,
+.k-app[data-layout='phone'][data-module='develop'] .k-vbar__ref,
+.k-app[data-layout='phone'][data-module='develop'] .k-vbar__sep {
+  display: none;
+}
+
+.k-app[data-layout='phone'][data-module='develop'] .k-vbar__group {
+  min-height: 40px;
+  scroll-snap-align: start;
+}
+
+.k-app[data-layout='phone'][data-module='develop'] .k-vbar .k-iconbtn,
+.k-app[data-layout='phone'][data-module='develop'] .k-vbar__zoom {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.k-app[data-layout='phone'][data-module='develop'] .k-vbar__zoom {
+  display: grid;
+  place-items: center;
+  padding-inline: 7px;
+  border: 0;
+  border-radius: var(--k-radius-sm);
+  background: transparent;
+}
+
+.k-app[data-layout='phone'][data-module='develop'] .k-vbar__group--crop {
+  gap: 4px;
+}
+
+.k-app[data-layout='phone'][data-module='develop'] .k-vbar.is-crop .k-vbar__spacer {
+  min-width: 8px;
+}

@@ -172,6 +172,16 @@ export function applyTheme(): void {
   else root.setAttribute('data-theme', state.theme)
 }
 
+/** Re-read the cross-app choice whenever a Gallery or Studio route boots. */
+export function applyStoredTheme(): void {
+  try {
+    state.theme = validTheme(localStorage.getItem(THEME_STORAGE_KEY)) ?? state.theme
+  } catch {
+    // Storage can be unavailable in private mode; retain the in-memory choice.
+  }
+  applyTheme()
+}
+
 /** Cycles through the two explicit themes, starting from whatever is showing. */
 export function nextTheme(): Theme {
   const dark =

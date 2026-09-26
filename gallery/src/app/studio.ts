@@ -3,11 +3,11 @@ import { activeStudioImport, requestStudioSignIn, takePendingStudioImport } from
 import { api } from './api'
 import type { AppContext } from '../../../src/app/context'
 import type { ExportSettings } from '../../../src/editor/types'
-import { applyTheme } from './state'
+import { applyStoredTheme } from './state'
 
 // The login/session request can take a moment. Match the gallery theme while
 // the boot shell is still visible instead of waiting for the editor to mount.
-applyTheme()
+applyStoredTheme()
 
 const resize = (edge?: number): ExportSettings['resize'] => edge
   ? { mode: 'long-edge', value: edge, width: edge, height: edge, dontEnlarge: true }

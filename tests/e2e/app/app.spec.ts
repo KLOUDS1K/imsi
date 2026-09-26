@@ -419,7 +419,7 @@ test.describe.serial('KLOUD Studio', () => {
     expect(saved).toBeCloseTo(0.77, 2);
   });
 
-  test('phone layout: drawer closed, develop panel as a sheet', async () => {
+  test('phone layout: photo-first tool dock and adjustable develop sheet', async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await k(page, async (rt) => {
       await rt.ctx.openPhoto(rt.ctx.library.all()[0].id);
@@ -429,11 +429,40 @@ test.describe.serial('KLOUD Studio', () => {
     const layout = await page.evaluate(() => {
       const app = document.querySelector('.k-app') as HTMLElement;
       const right = document.querySelector('.k-app__right') as HTMLElement;
-      return { layout: app.dataset.layout, left: app.classList.contains('is-left-open'), rightH: right.getBoundingClientRect().height };
+      const dock = document.querySelector('.k-mobile-dock') as HTMLElement;
+      const film = document.querySelector('.k-app__film') as HTMLElement;
+      return {
+        layout: app.dataset.layout,
+        left: app.classList.contains('is-left-open'),
+        panelOpen: app.classList.contains('is-right-open'),
+        rightVisible: getComputedStyle(right).visibility,
+        dockH: dock.getBoundingClientRect().height,
+        filmH: film.getBoundingClientRect().height,
+      };
     });
     expect(layout.layout).toBe('phone');
     expect(layout.left).toBe(false);
-    expect(layout.rightH).toBeGreaterThan(150);
+    expect(layout.panelOpen).toBe(false);
+    expect(layout.rightVisible).toBe('hidden');
+    expect(layout.dockH).toBeGreaterThan(50);
+    expect(layout.filmH).toBe(0);
+
+    const adjust = page.getByRole('tab', { name: 'Adjust' });
+    await expect(adjust).toBeVisible();
+    await adjust.click();
+    await expect(page.locator('.k-app')).toHaveClass(/is-right-open/);
+    await expect(page.getByRole('complementary', { name: 'Develop panel' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Light', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Color', exact: true }).click();
+    await expect(page.getByText('Color Mixer', { exact: true })).toBeVisible();
+
+    const crop = page.getByRole('tab', { name: 'Crop' });
+    await crop.click();
+    expect(await k(page, (rt) => rt.ctx.tool.value)).toBe('crop');
+    await expect(page.locator('.k-pnl__mobile-title')).toHaveText('Crop & rotate');
+    await crop.click();
+    await expect(page.locator('.k-app')).not.toHaveClass(/is-right-open/);
+
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
     expect(overflow).toBe(false);
   });

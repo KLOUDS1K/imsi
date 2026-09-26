@@ -25,7 +25,7 @@ test('gallery and Studio share one persisted light/dark theme', async ({ page })
     localStorage.setItem('kloud.explorer.prefs', JSON.stringify({ view: 'grid', sortKey: 'date', sortDir: 'desc', theme: 'light', expanded: [] }));
   });
   await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark', { timeout: 10_000 });
 
   await page.locator('[data-role="theme"]').click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');

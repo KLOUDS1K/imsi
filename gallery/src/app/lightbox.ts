@@ -303,7 +303,11 @@ function installZoom(
   const distance = (values: Point[]): number => Math.hypot(values[1].x - values[0].x, values[1].y - values[0].y)
 
   stage.addEventListener('wheel', (event) => {
-    if (!(event.target as Element | null)?.closest('.viewer__figure')) return
+    // Before zoom, only wheel directly over the photo. Once zoomed the stage
+    // intentionally owns the input surface (so dragging still works outside
+    // the transformed figure); accept wheel there too instead of silently
+    // freezing the zoom level.
+    if (!zoomed && !(event.target as Element | null)?.closest('.viewer__figure')) return
     event.preventDefault()
     const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? stage.clientHeight : 1
     const delta = event.deltaY * unit

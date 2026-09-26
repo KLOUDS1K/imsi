@@ -55,14 +55,21 @@ function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const parts = stored.split('$')
-  if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false
-  const iterations = Number(parts[1])
-  if (!Number.isFinite(iterations) || iterations < 1000) return false
-  const salt = unb64(parts[2] as string)
-  const expected = unb64(parts[3] as string)
-  const actual = new Uint8Array(await pbkdf2(password, salt, iterations))
-  return timingSafeEqual(actual, expected)
+  try {
+    const parts = stored.split('$')
+    if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false
+    const iterations = Number(parts[1])
+    // workerd rejects PBKDF2 above 100k. A corrupt row must fail closed, not
+    // turn a login into a 500 or allow username enumeration.
+    if (!Number.isInteger(iterations) || iterations < 1000 || iterations > PBKDF2_ITERATIONS) return false
+    const salt = unb64(parts[2] as string)
+    const expected = unb64(parts[3] as string)
+    if (salt.byteLength < 8 || expected.byteLength !== 32) return false
+    const actual = new Uint8Array(await pbkdf2(password, salt, iterations))
+    return timingSafeEqual(actual, expected)
+  } catch {
+    return false
+  }
 }
 
 async function sha256Hex(input: string): Promise<string> {
@@ -80,9 +87,19 @@ export async function createSession(env: Env, adminId: number, secure: boolean):
   const raw = b64(crypto.getRandomValues(new Uint8Array(32)))
   const id = await sha256Hex(raw)
   const now = Math.floor(Date.now() / 1000)
-  await env.DB.prepare('INSERT INTO sessions (id, admin_id, expires_at, created_at) VALUES (?, ?, ?, ?)')
-    .bind(id, adminId, now + SESSION_TTL_SEC, now)
-    .run()
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now),
+    env.DB.prepare('INSERT INTO sessions (id, admin_id, expires_at, created_at) VALUES (?, ?, ?, ?)')
+      .bind(id, adminId, now + SESSION_TTL_SEC, now),
+    env.DB.prepare(
+      `DELETE FROM sessions
+        WHERE admin_id = ? AND id != ? AND id NOT IN (
+          SELECT id FROM sessions
+           WHERE admin_id = ? AND id != ?
+           ORDER BY created_at DESC, id DESC LIMIT 9
+        )`,
+    ).bind(adminId, id, adminId, id),
+  ])
 
   const flags = [
     `${COOKIE}=${encodeURIComponent(raw)}`,
@@ -105,7 +122,7 @@ export async function destroySession(env: Env, request: Request, secure: boolean
   return flags.join('; ')
 }
 
-/** Returns the session for this request, or null. Also prunes expired rows. */
+/** Returns the session for this request, or null. Expired rows are pruned on sign-in. */
 export async function getSession(env: Env, request: Request): Promise<Session | null> {
   const raw = parseCookies(request.headers.get('cookie'))[COOKIE]
   if (!raw) return null

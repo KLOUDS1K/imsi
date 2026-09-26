@@ -15,6 +15,7 @@ import { beginTransfer } from './transfers'
 import { uploadPhoto } from './upload'
 import { loadStats, statsPanel } from './stats'
 import { takeStudioLoginReturn } from './studio-link'
+import { go } from './router'
 
 /** Today, offered as a placeholder for people who name folders by date. */
 function today(): string {
@@ -26,9 +27,14 @@ function today(): string {
 // ------------------------------------------------------------------ sign in
 
 export async function signIn(): Promise<void> {
-  const { needsSetup, requiresKey } = await api.session
+  const { needsSetup, requiresKey, setupAllowed } = await api.session
     .needsSetup()
-    .catch(() => ({ needsSetup: false, requiresKey: false }))
+    .catch(() => ({ needsSetup: false, requiresKey: false, setupAllowed: true }))
+
+  if (needsSetup && !setupAllowed) {
+    toast('Administrator setup is locked. Configure SETUP_KEY on the server first.', 'error')
+    return
+  }
 
   openSheet({
     title: needsSetup ? 'Create an administrator' : 'Sign in',
@@ -65,8 +71,9 @@ export async function signIn(): Promise<void> {
       }
       setAdminHooks(HOOKS)
       update({ admin: true, username })
-      if (takeStudioLoginReturn()) {
-        window.location.assign('/studio')
+      const studioReturn = takeStudioLoginReturn()
+      if (studioReturn) {
+        window.location.assign(studioReturn)
         return
       }
       await reload()
@@ -279,13 +286,26 @@ function deleteFolder(folder: Folder): void {
     ],
     onSubmit: async (values) => {
       if ((values.confirm ?? '').trim() !== folder.name) return 'That does not match the folder name'
+      let cursor = state.folderId
+      let leavesCurrentRouteBehind = cursor === folder.id
+      while (!leavesCurrentRouteBehind && cursor !== ROOT) {
+        const current = state.tree.find((item) => item.id === cursor)
+        if (!current) break
+        cursor = current.parentId
+        leavesCurrentRouteBehind = cursor === folder.id
+      }
       let result
       try {
         result = await api.folders.remove(folder.id)
       } catch (err) {
         return err instanceof Error ? err.message : 'Could not delete that'
       }
-      await reload()
+      if (leavesCurrentRouteBehind) {
+        await loadTree()
+        go({ folderId: folder.parentId, photoId: null }, true)
+      } else {
+        await reload()
+      }
       toast(`Deleted ${plural(result.deletedFolders, 'folder')} and ${plural(result.deletedPhotos, 'photo')}`)
       return
     },
@@ -369,6 +389,9 @@ function deletePhoto(photo: Photo): void {
 
 const PHOTO_EXTENSIONS =
   /\.(jpe?g|png|webp|gif|avif|heic|heif|tiff?|bmp|dng|cr2|cr3|nef|arw|raf|orf|rw2|srw|pef)$/i
+const PHOTO_ACCEPT = [
+  'image/*', '.dng', '.cr2', '.cr3', '.nef', '.arw', '.raf', '.orf', '.rw2', '.srw', '.pef',
+].join(',')
 
 function looksLikePhoto(file: File): boolean {
   return file.type.startsWith('image/') || PHOTO_EXTENSIONS.test(file.name)
@@ -507,7 +530,7 @@ function pickFiles(folderId: string): void {
   const input = document.createElement('input')
   input.type = 'file'
   input.multiple = true
-  input.accept = 'image/*'
+  input.accept = PHOTO_ACCEPT
   input.style.display = 'none'
   document.body.append(input)
   input.addEventListener('change', () => {
@@ -515,6 +538,7 @@ function pickFiles(folderId: string): void {
     input.remove()
     startUpload(files.map((file) => ({ dir: [], file })), folderId)
   })
+  input.addEventListener('cancel', () => input.remove(), { once: true })
   input.click()
 }
 

@@ -12,7 +12,9 @@ export default defineConfig({
     outDir: 'dist/client',
     emptyOutDir: true,
     target: 'es2022',
-    sourcemap: true,
+    // Public source maps expose the complete editor implementation and are not
+    // consumed by an error-reporting service in production.
+    sourcemap: false,
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
       input: { index: resolve(import.meta.dirname, 'index.html') },

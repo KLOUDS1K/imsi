@@ -59,7 +59,7 @@ export const api = {
     status: () =>
       request<{ authenticated: boolean; username: string | null }>('/api/admin/session'),
     needsSetup: () =>
-      request<{ needsSetup: boolean; requiresKey: boolean }>('/api/admin/setup'),
+      request<{ needsSetup: boolean; requiresKey: boolean; setupAllowed: boolean }>('/api/admin/setup'),
     createFirstAdmin: (username: string, password: string, setupKey: string) =>
       request<{ ok: true }>('/api/admin/setup', {
         method: 'POST',
@@ -117,5 +117,7 @@ export const api = {
       }),
     removeEdited: (id: string) =>
       request<{ ok: true }>(`/api/admin/photos/${id}/edited`, { method: 'DELETE' }),
+    discardEditedUpload: (id: string, revision: string) =>
+      request<{ ok: true }>(`/api/admin/photos/${id}/edited/${revision}`, { method: 'DELETE' }),
   },
 }

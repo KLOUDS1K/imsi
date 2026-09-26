@@ -33,6 +33,7 @@ export function rowsOf<T>(slot: { results?: unknown[] } | undefined): T[] {
 }
 
 const flag = (admin: boolean) => (admin ? 1 : 0)
+const ID_CHUNK = 80
 
 /*
  * One pass down the subtree of every child, ranked so photos that actually
@@ -59,18 +60,26 @@ const COVER_SQL = `WITH RECURSIVE sub(root, id) AS (
    ),
    owned AS (
      SELECT s.root AS root, p.id AS pid,
-            CASE WHEN p.thumb_key IS NOT NULL THEN 1 ELSE 0 END AS has_thumb,
+            CASE WHEN p.edited_thumb_key IS NOT NULL OR p.edited_preview_key IS NOT NULL
+                       OR p.edited_key IS NOT NULL OR p.thumb_key IS NOT NULL
+                       OR p.preview_key IS NOT NULL THEN 1 ELSE 0 END AS has_thumb,
+            CASE WHEN p.edited_thumb_key IS NOT NULL THEN 'et'
+                 WHEN p.edited_preview_key IS NOT NULL THEN 'ep'
+                 WHEN p.edited_key IS NOT NULL THEN 'e'
+                 WHEN p.thumb_key IS NOT NULL THEN 't'
+                 ELSE 'p' END AS kind,
+            p.edited_key AS edited_key,
             p.sort_order AS so, p.created_at AS ca
        FROM sub s JOIN photos p ON p.folder_id = s.id
       WHERE (?2 = 1 OR p.published = 1)
    ),
    ranked AS (
-     SELECT root, pid, has_thumb,
+     SELECT root, pid, has_thumb, kind, edited_key,
             ROW_NUMBER() OVER (PARTITION BY root ORDER BY has_thumb DESC, so DESC, ca DESC) AS rn,
             COUNT(*)     OVER (PARTITION BY root) AS total
        FROM owned
    )
-   SELECT root, pid, has_thumb, total FROM ranked WHERE rn <= 5`
+   SELECT root, pid, has_thumb, kind, edited_key, total FROM ranked WHERE rn <= 5`
 
 /**
  * The statements one folder view needs, ready to hand to `DB.batch()`.
@@ -123,20 +132,35 @@ export function subcountsStmt(env: Env, admin: boolean) {
 }
 
 /** Assembles one folder listing from the rows the batch brought back. */
+export interface CoverRef {
+  id: string
+  kind: 't' | 'p' | 'et' | 'ep' | 'e'
+  version: string | null
+}
+
+export interface FolderEntryWithCoverRefs extends FolderEntry {
+  /** Worker-internal; replaced by signed URLs before a response is sent. */
+  coverRefs?: CoverRef[]
+}
+
 export function toEntries(
   children: FolderRow[],
   covers: CoverRow[],
   subcounts: SubcountRow[],
   admin: boolean,
   locked: ReadonlySet<string>,
-): FolderEntry[] {
+): FolderEntryWithCoverRefs[] {
   const totals = new Map<string, number>()
-  const shots = new Map<string, string[]>()
+  const shots = new Map<string, CoverRef[]>()
   for (const row of covers) {
     totals.set(row.root, row.total)
     if (row.has_thumb === 1) {
       const list = shots.get(row.root) ?? []
-      list.push(row.pid)
+      list.push({
+        id: row.pid,
+        kind: row.kind,
+        version: row.edited_key?.split('/')[2] ?? null,
+      })
       shots.set(row.root, list)
     }
   }
@@ -154,7 +178,8 @@ export function toEntries(
       ...toPublicFolder(row, admin),
       photoCount: totals.get(row.id) ?? 0,
       folderCount: subcount.get(row.id) ?? 0,
-      covers: shots.get(row.id) ?? [],
+      covers: [],
+      coverRefs: shots.get(row.id) ?? [],
     }
   })
 }
@@ -163,6 +188,8 @@ export interface CoverRow {
   root: string
   pid: string
   has_thumb: number
+  kind: CoverRef['kind']
+  edited_key: string | null
   total: number
 }
 export interface SubcountRow {
@@ -257,14 +284,15 @@ export interface NewFolder {
   date: string | null
 }
 
-export async function insert(env: Env, folder: NewFolder): Promise<void> {
+export async function insert(env: Env, folder: NewFolder): Promise<boolean> {
   const now = Math.floor(Date.now() / 1000)
-  await env.DB.prepare(
-    `INSERT INTO folders (id, parent_id, name, note, folder_date, sort_order, published, created_at, updated_at)
+  const res = await env.DB.prepare(
+    `INSERT OR IGNORE INTO folders (id, parent_id, name, note, folder_date, sort_order, published, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
   )
     .bind(folder.id, folder.parentId, folder.name, folder.note, folder.date, now, now, now)
     .run()
+  return (res.meta.changes ?? 0) === 1
 }
 
 export interface FolderPatch {
@@ -315,7 +343,9 @@ export async function assertMoveIsLegal(env: Env, id: string, newParentId: strin
 }
 
 export async function removeMany(env: Env, ids: string[]): Promise<void> {
-  if (!ids.length) return
-  const marks = ids.map(() => '?').join(',')
-  await env.DB.prepare(`DELETE FROM folders WHERE id IN (${marks})`).bind(...ids).run()
+  for (let i = 0; i < ids.length; i += ID_CHUNK) {
+    const chunk = ids.slice(i, i + ID_CHUNK)
+    const marks = chunk.map(() => '?').join(',')
+    await env.DB.prepare(`DELETE FROM folders WHERE id IN (${marks})`).bind(...chunk).run()
+  }
 }

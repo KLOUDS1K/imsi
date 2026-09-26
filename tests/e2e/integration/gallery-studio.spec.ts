@@ -58,7 +58,7 @@ test('anonymous visitors cannot see or open Studio', async ({ page }) => {
   await page.route('**/api/browse?**', (route) => route.fulfill({ json: { folder: null, path: [], folders: [], photos: [], admin: false, lock: null } }));
   await page.route('**/api/hit', (route) => route.fulfill({ json: { ok: true } }));
   await page.route('**/api/admin/session', (route) => route.fulfill({ json: { authenticated: false, username: null } }));
-  await page.route('**/api/admin/setup', (route) => route.fulfill({ json: { needsSetup: false, requiresKey: false } }));
+  await page.route('**/api/admin/setup', (route) => route.fulfill({ json: { needsSetup: false, requiresKey: false, setupAllowed: true } }));
 
   await page.goto('/');
   await expect(page.getByRole('link', { name: 'Open KLOUD Studio' })).toBeHidden();

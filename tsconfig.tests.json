@@ -10,5 +10,8 @@
   "include": [
     "src",
     "tests"
+  ],
+  "exclude": [
+    "tests/unit/worker-hardening.test.ts"
   ]
 }

@@ -18,6 +18,29 @@ export const keys = {
   editedThumb: (id: string, revision: string) => `edited/${id}/${revision}/thumb`,
 }
 
+/** Lightweight magic-byte validation for browser-generated derivatives. */
+export function imageBytesMatch(buffer: ArrayBuffer, contentType: string): boolean {
+  const bytes = new Uint8Array(buffer)
+  if (contentType === 'image/jpeg') {
+    return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  }
+  if (contentType === 'image/png') {
+    const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+    return bytes.length >= sig.length && sig.every((value, index) => bytes[index] === value)
+  }
+  if (contentType === 'image/webp') {
+    return bytes.length >= 12
+      && String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF'
+      && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP'
+  }
+  if (contentType === 'image/avif') {
+    if (bytes.length < 16 || String.fromCharCode(...bytes.slice(4, 8)) !== 'ftyp') return false
+    const brands = String.fromCharCode(...bytes.slice(8, Math.min(bytes.length, 64)))
+    return brands.includes('avif') || brands.includes('avis')
+  }
+  return false
+}
+
 export async function putOriginal(
   env: Env,
   id: string,
@@ -44,8 +67,22 @@ export async function putDerivative(
 }
 
 export async function deleteObjects(env: Env, objectKeys: (string | null)[]): Promise<void> {
-  const present = objectKeys.filter((k): k is string => Boolean(k))
-  if (present.length) await env.MEDIA.delete(present)
+  const present = [...new Set(objectKeys.filter((k): k is string => Boolean(k)))]
+  for (let i = 0; i < present.length; i += 1000) {
+    await env.MEDIA.delete(present.slice(i, i + 1000))
+  }
+}
+
+/** List every object below a controlled prefix, following R2 pagination. */
+export async function listObjectKeys(env: Env, prefix: string): Promise<string[]> {
+  const out: string[] = []
+  let cursor: string | undefined
+  do {
+    const page = await env.MEDIA.list({ prefix, cursor, limit: 1000 })
+    out.push(...page.objects.map((object) => object.key))
+    cursor = page.truncated ? page.cursor : undefined
+  } while (cursor)
+  return out
 }
 
 /**

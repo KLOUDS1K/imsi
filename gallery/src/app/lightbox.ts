@@ -5,7 +5,7 @@ import { icon } from './icons'
 import { el, need } from './ui'
 import { downloadEdited, downloadOriginal } from './download'
 import { openPhotoInStudio } from './studio-link'
-import { go, parseRoute } from './router'
+import { canGoBack, go, parseRoute } from './router'
 import { morph } from './motion'
 import type { Upgrade } from './fullsize'
 import { isRenderable, loadOriginal, wantsOriginal } from './fullsize'
@@ -32,6 +32,7 @@ let host: HTMLElement | null = null
 let restoreFocus: HTMLElement | null = null
 let stageImg: HTMLElement | null = null
 let refit: (() => void) | null = null
+let disposeZoom: (() => void) | null = null
 let upgrade: Upgrade | null = null
 let generation = 0
 
@@ -112,13 +113,20 @@ function step(delta: number): void {
 }
 
 function close(): void {
-  if (parseRoute().photoId) history.back()
-  else teardown()
+  const route = parseRoute()
+  if (!route.photoId) {
+    teardown()
+    return
+  }
+  if (canGoBack()) history.back()
+  else go({ folderId: route.folderId, photoId: null }, true)
 }
 
 function teardown(): void {
   if (!host) return
   dropUpgrade()
+  disposeZoom?.()
+  disposeZoom = null
   host.classList.remove('is-open')
   host.hidden = true
   host.replaceChildren()
@@ -126,6 +134,8 @@ function teardown(): void {
   stageImg = null
   refit = null
   document.documentElement.classList.remove('is-viewing')
+  const app = document.querySelector<HTMLElement>('.app')
+  if (app) app.inert = false
   document.removeEventListener('keydown', onKey, true)
   window.removeEventListener('resize', onResize)
   restoreFocus?.focus?.()
@@ -138,6 +148,25 @@ function onResize(): void {
 
 function onKey(event: KeyboardEvent): void {
   if (!openId) return
+  if (event.key === 'Tab' && host) {
+    const focusable = [...host.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])')]
+      .filter((node) => !node.hidden)
+    if (!focusable.length) {
+      event.preventDefault()
+      host.focus()
+      return
+    }
+    const first = focusable[0] as HTMLElement
+    const last = focusable[focusable.length - 1] as HTMLElement
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+    return
+  }
   if (event.key === 'Escape') {
     event.preventDefault()
     event.stopPropagation()
@@ -146,6 +175,7 @@ function onKey(event: KeyboardEvent): void {
     event.preventDefault()
     step(-1)
   } else if (event.key === 'ArrowRight' || event.key === ' ') {
+    if (event.key === ' ' && (event.target as Element | null)?.closest('button, a, input, select, textarea')) return
     event.preventDefault()
     step(1)
   } else if (event.key === 'Home' && sequence[0]) {
@@ -343,11 +373,17 @@ function installZoom(
     const target = event.target as Element | null
     const onPhoto = startOnPhoto
     const wasMoved = moved
+    if (pointers.size) {
+      const remaining = [...pointers.values()][0] as Point
+      start = remaining
+      startPan = { x: panX, y: panY }
+      startOnPhoto = true
+      moved = true
+      return
+    }
     start = null
     startOnPhoto = false
     moved = false
-    if (pointers.size) return
-
     if (!zoomed && wasMoved && Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.4) {
       step(dx < 0 ? 1 : -1)
       return
@@ -365,6 +401,8 @@ function installZoom(
     pointers.delete(event.pointerId)
     start = null
     pinch = null
+    moved = false
+    startOnPhoto = false
     figure.classList.remove('is-dragging')
   }, { signal: listeners.signal })
 
@@ -384,12 +422,17 @@ function paint(photo: Photo): void {
   const edited = editedVariant(photo)
   let selected: VariantKind = edited ? 'edited' : 'original'
   dropUpgrade()
+  disposeZoom?.()
+  disposeZoom = null
   const mine = ++generation
   openId = photo.id
 
   host.replaceChildren()
   host.hidden = false
+  host.setAttribute('aria-label', `Photo viewer — ${name}`)
   document.documentElement.classList.add('is-viewing')
+  const app = document.querySelector<HTMLElement>('.app')
+  if (app) app.inert = true
 
   const originalDownload = el('button', {
     class: 'viewer__btn viewer__btn--download', type: 'button', title: 'Download original',
@@ -483,6 +526,7 @@ function paint(photo: Photo): void {
     }
 
     zoom = installZoom(stage, figure, () => ({ width: naturalW, height: naturalH }), () => beginUpgrade(true))
+    disposeZoom = zoom.dispose
     img.addEventListener('load', () => {
       if (mine !== generation || selected !== kind) return
       if (!naturalW || !naturalH) {
@@ -539,7 +583,10 @@ function paint(photo: Photo): void {
 
   host.append(bar, stage, caption)
   showVariant(selected)
-  requestAnimationFrame(() => host?.classList.add('is-open'))
+  requestAnimationFrame(() => {
+    host?.classList.add('is-open')
+    closeBtn.focus()
+  })
 }
 
 export function syncViewer(photoId: string | null): void {
@@ -566,5 +613,4 @@ export function syncViewer(photoId: string | null): void {
   document.addEventListener('keydown', onKey, true)
   window.addEventListener('resize', onResize)
   morph(thumbnailFor(photoId), () => paint(photo), () => stageImg)
-  node.focus?.()
 }

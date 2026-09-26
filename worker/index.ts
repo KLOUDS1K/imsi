@@ -1,5 +1,6 @@
 import type { Env } from './types'
 import { handleApi, toErrorResponse } from './api'
+import { getSession } from './auth'
 
 /**
  * No inline scripts are used, so the script policy can stay strict. Styles
@@ -21,6 +22,7 @@ const CSP = [
   "base-uri 'none'",
   "frame-ancestors 'none'",
   "object-src 'none'",
+  'upgrade-insecure-requests',
 ].join('; ')
 
 /**
@@ -34,6 +36,10 @@ const SECURITY_HEADERS: Record<string, string> = {
   'referrer-policy': 'strict-origin-when-cross-origin',
   'x-frame-options': 'DENY',
   'permissions-policy': 'geolocation=(), microphone=(), camera=()',
+  'strict-transport-security': 'max-age=63072000; includeSubDomains',
+  'cross-origin-opener-policy': 'same-origin',
+  'cross-origin-resource-policy': 'same-origin',
+  'x-permitted-cross-domain-policies': 'none',
 }
 
 /** Paths the worker owns outright — never rewritten to the app shell. */
@@ -50,12 +56,26 @@ export default {
     const url = new URL(request.url)
 
     try {
+      // Keep the editor page itself behind the session boundary. Its mutation
+      // APIs are independently protected too, but an anonymous visitor should
+      // never see the Studio shell flash before client-side code redirects.
+      const pagePath = url.pathname.replace(/\/+$/, '') || '/'
+      if ((request.method === 'GET' || request.method === 'HEAD') && pagePath === '/studio') {
+        if (!(await getSession(env, request))) {
+          const returnTo = `${url.pathname}${url.search}`
+          const location = new URL(`/admin?return=${encodeURIComponent(returnTo)}`, url)
+          return withSecurityHeaders(Response.redirect(location.toString(), 302), {
+            'cache-control': 'no-store',
+          })
+        }
+      }
+
       // ctx goes through so the counters can be written after the response has
       // already gone out — a stats write must never sit in front of a photo.
       const handled = await handleApi(request, env, url, ctx)
-      if (handled) return handled
+      if (handled) return withSecurityHeaders(handled)
     } catch (err) {
-      return toErrorResponse(err)
+      return withSecurityHeaders(toErrorResponse(err))
     }
 
     const res = await env.ASSETS.fetch(request)

@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.worker.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": [
+    "worker/**/*.ts",
+    "tests/unit/worker-hardening.test.ts"
+  ]
+}

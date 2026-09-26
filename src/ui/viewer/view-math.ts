@@ -112,6 +112,23 @@ export function anchoredCenter(t: DisplayTransform, anchor: Point, newScale: num
   return clampCenter(c, newScale, info);
 }
 
+/**
+ * Centre for a combined pinch: the image point under `from` stays under the
+ * moving midpoint `to` at `newScale`. Calculating both changes together avoids
+ * the two-frame jump caused by applying zoom and pan separately.
+ */
+export function gestureCenter(t: DisplayTransform, from: Point, to: Point, newScale: number, info: ViewportInfo): Point {
+  const p = canvasToOutput(t, from.x, from.y);
+  return clampCenter(
+    {
+      x: p.x - (to.x - info.vw / 2) / (info.outW * newScale),
+      y: p.y - (to.y - info.vh / 2) / (info.outH * newScale),
+    },
+    newScale,
+    info,
+  );
+}
+
 /** Centre after dragging the image by (dx, dy) canvas px. */
 export function pannedCenter(center: Point, dx: number, dy: number, scale: number, info: ViewportInfo): Point {
   return clampCenter({ x: center.x - dx / (info.outW * scale), y: center.y - dy / (info.outH * scale) }, scale, info);

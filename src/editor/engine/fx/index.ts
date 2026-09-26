@@ -20,6 +20,7 @@ export { HEAL_PASS, PATCH_COMPOSITE_PASS, healUniforms, patchCompositeUniforms, 
 export {
   DETAIL_STAGE,
   AI_DENOISE_PASS,
+  AI_DENOISE_COARSE_PASS,
   COLOR_NR_PASS,
   LUMA_NR_PASS,
   LUMA_CONTRAST_PASS,

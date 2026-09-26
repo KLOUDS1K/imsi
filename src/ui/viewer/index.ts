@@ -16,7 +16,7 @@ import { createMaskTool } from './mask-tool';
 import { createViewerBar } from './viewer-bar';
 import { createWbTool } from './wb-tool';
 import { visibleRect } from './view-math';
-import { centerOn, currentTransform, cycleCompareLayout, isZoomedIn, panBy, setZoom, stepZoom, toggleBefore, toggleClipping, toggleFit100, zoomBy } from './zoom';
+import { centerOn, currentTransform, cycleCompareLayout, isZoomedIn, panBy, setZoom, stepZoom, toggleBefore, toggleClipping, toggleFit100, zoomBy, zoomGesture } from './zoom';
 
 export function createViewer(ctx: AppContext): { el: HTMLElement; dispose(): void } {
   const d = new Disposer();
@@ -99,7 +99,11 @@ export function createViewer(ctx: AppContext): { el: HTMLElement; dispose(): voi
   let pan: { id: number; x: number; y: number } | null = null;
   let spaceDown = false;
   const touches = new Map<number, Point>();
+  const touchStarts = new Map<number, { point: Point; moved: boolean }>();
   let pinch: { dist: number; mid: Point } | null = null;
+  let lastTap: { at: number; point: Point } | null = null;
+  let wheelIntent: 'zoom' | 'pan' | null = null;
+  let wheelTimer = 0;
   let readoutRaf = 0;
 
   const updateReadout = (p: Point) => {
@@ -121,11 +125,17 @@ export function createViewer(ctx: AppContext): { el: HTMLElement; dispose(): voi
     lastPointer = p;
     if (e.pointerType === 'touch') {
       touches.set(e.pointerId, p);
+      touchStarts.set(e.pointerId, { point: p, moved: false });
+      stage.setPointerCapture(e.pointerId);
       if (touches.size === 2) {
         dragTool?.onCancel?.();
         dragTool = null;
+        pan = null;
+        stage.classList.remove('is-panning');
+        for (const start of touchStarts.values()) start.moved = true;
         const [a, b] = [...touches.values()];
-        pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+        pinch = { dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+        e.preventDefault();
         return;
       }
     }
@@ -139,7 +149,7 @@ export function createViewer(ctx: AppContext): { el: HTMLElement; dispose(): voi
       return;
     }
     if (wantsPan || isZoomedIn(ctx)) {
-      pan = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      pan = { id: e.pointerId, x: p.x, y: p.y };
       stage.setPointerCapture(e.pointerId);
       stage.classList.add('is-panning');
       e.preventDefault();
@@ -150,13 +160,15 @@ export function createViewer(ctx: AppContext): { el: HTMLElement; dispose(): voi
     lastPointer = p;
     if (e.pointerType === 'touch' && touches.has(e.pointerId)) {
       touches.set(e.pointerId, p);
+      const origin = touchStarts.get(e.pointerId);
+      if (origin && Math.hypot(p.x - origin.point.x, p.y - origin.point.y) > 7) origin.moved = true;
       if (pinch && touches.size === 2) {
         const [a, b] = [...touches.values()];
-        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        const dist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        if (pinch.dist > 0) zoomBy(ctx, dist / pinch.dist, mid);
-        panBy(ctx, mid.x - pinch.mid.x, mid.y - pinch.mid.y);
+        zoomGesture(ctx, dist / pinch.dist, pinch.mid, mid);
         pinch = { dist, mid };
+        e.preventDefault();
         return;
       }
     }
@@ -166,9 +178,9 @@ export function createViewer(ctx: AppContext): { el: HTMLElement; dispose(): voi
       return;
     }
     if (pan && pan.id === e.pointerId) {
-      panBy(ctx, e.clientX - pan.x, e.clientY - pan.y);
-      pan.x = e.clientX;
-      pan.y = e.clientY;
+      panBy(ctx, p.x - pan.x, p.y - pan.y);
+      pan.x = p.x;
+      pan.y = p.y;
       return;
     }
     const tool = activeTool();
@@ -178,8 +190,19 @@ export function createViewer(ctx: AppContext): { el: HTMLElement; dispose(): voi
     updateReadout(p);
   };
   const onUp = (e: PointerEvent) => {
+    const p = host.local(e);
+    const touchStart = touchStarts.get(e.pointerId);
+    const endedPinch = !!pinch;
     touches.delete(e.pointerId);
-    if (touches.size < 2) pinch = null;
+    touchStarts.delete(e.pointerId);
+    if (touches.size < 2) {
+      pinch = null;
+      if (endedPinch && touches.size === 1 && isZoomedIn(ctx)) {
+        const [id, point] = [...touches.entries()][0];
+        pan = { id, x: point.x, y: point.y };
+        stage.classList.add('is-panning');
+      }
+    }
     if (dragTool) {
       dragTool.onPointerUp?.(e, host.local(e));
       dragTool = null;
@@ -189,15 +212,31 @@ export function createViewer(ctx: AppContext): { el: HTMLElement; dispose(): voi
       pan = null;
       stage.classList.remove('is-panning');
     }
+    if (e.pointerType === 'touch' && !endedPinch && !touchStart?.moved && !activeTool()) {
+      const now = performance.now();
+      if (lastTap && now - lastTap.at < 320 && Math.hypot(p.x - lastTap.point.x, p.y - lastTap.point.y) < 28) {
+        toggleFit100(ctx, p);
+        lastTap = null;
+      } else {
+        lastTap = { at: now, point: p };
+      }
+    }
     if (stage.hasPointerCapture(e.pointerId)) stage.releasePointerCapture(e.pointerId);
   };
   const onCancel = (e: PointerEvent) => {
-    touches.delete(e.pointerId);
+    touches.clear();
+    touchStarts.clear();
     pinch = null;
     dragTool?.onCancel?.();
     dragTool = null;
     pan = null;
+    stage.classList.remove('is-panning');
     host.requestDraw();
+  };
+  const onLostCapture = (e: PointerEvent) => {
+    // releasePointerCapture() after a normal pointerup also emits this event;
+    // only cancel when the pointer is still part of an active interaction.
+    if (touches.has(e.pointerId) || pan?.id === e.pointerId || dragTool) onCancel(e);
   };
   const onLeave = () => {
     ctx.pixelReadout.set(null);
@@ -208,12 +247,21 @@ export function createViewer(ctx: AppContext): { el: HTMLElement; dispose(): voi
     if (!ctx.doc.value) return;
     e.preventDefault();
     const p = host.local(e);
-    // Pinch-zoom on trackpads arrives as ctrl+wheel; plain wheel zooms when fitted, pans when zoomed in.
-    if (e.ctrlKey || e.metaKey || !isZoomedIn(ctx)) {
-      const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0025));
+    const unit = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : e.deltaMode === WheelEvent.DOM_DELTA_PAGE ? stage.clientHeight : 1;
+    const dx = e.deltaX * unit;
+    const dy = e.deltaY * unit;
+    if (!wheelIntent) {
+      const pinchWheel = e.ctrlKey || e.metaKey;
+      const steppedWheel = e.deltaMode !== WheelEvent.DOM_DELTA_PIXEL || (Math.abs(dx) < 1 && Math.abs(dy) >= 40);
+      wheelIntent = pinchWheel || steppedWheel || !isZoomedIn(ctx) ? 'zoom' : 'pan';
+    }
+    window.clearTimeout(wheelTimer);
+    wheelTimer = window.setTimeout(() => { wheelIntent = null; }, 160);
+    if (wheelIntent === 'zoom' && !e.shiftKey) {
+      const factor = Math.exp(-dy * (e.ctrlKey || e.metaKey ? 0.006 : 0.0015));
       zoomBy(ctx, factor, p);
     } else {
-      panBy(ctx, -e.deltaX, -e.deltaY);
+      panBy(ctx, e.shiftKey && Math.abs(dx) < 1 ? -dy : -dx, e.shiftKey ? 0 : -dy);
     }
   };
   const onDbl = (e: MouseEvent) => {
@@ -229,25 +277,40 @@ export function createViewer(ctx: AppContext): { el: HTMLElement; dispose(): voi
       if (spaceDown && e.target === stage) e.preventDefault();
     }
   };
+  const resetPointers = () => {
+    touches.clear();
+    touchStarts.clear();
+    pinch = null;
+    pan = null;
+    dragTool?.onCancel?.();
+    dragTool = null;
+    stage.classList.remove('is-panning');
+    host.requestDraw();
+  };
   stage.addEventListener('pointerdown', onDown);
   stage.addEventListener('pointermove', onMove);
   stage.addEventListener('pointerup', onUp);
   stage.addEventListener('pointercancel', onCancel);
+  stage.addEventListener('lostpointercapture', onLostCapture);
   stage.addEventListener('pointerleave', onLeave);
   stage.addEventListener('wheel', onWheel, { passive: false });
   stage.addEventListener('dblclick', onDbl);
   window.addEventListener('keydown', onKey);
   window.addEventListener('keyup', onKey);
+  window.addEventListener('blur', resetPointers);
   d.add(() => {
     stage.removeEventListener('pointerdown', onDown);
     stage.removeEventListener('pointermove', onMove);
     stage.removeEventListener('pointerup', onUp);
     stage.removeEventListener('pointercancel', onCancel);
+    stage.removeEventListener('lostpointercapture', onLostCapture);
     stage.removeEventListener('pointerleave', onLeave);
     stage.removeEventListener('wheel', onWheel);
     stage.removeEventListener('dblclick', onDbl);
     window.removeEventListener('keydown', onKey);
     window.removeEventListener('keyup', onKey);
+    window.removeEventListener('blur', resetPointers);
+    window.clearTimeout(wheelTimer);
     cancelAnimationFrame(raf);
     cancelAnimationFrame(readoutRaf);
   });

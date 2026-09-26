@@ -12,6 +12,7 @@ import {
   clamp,
   clampCenter,
   fillScale,
+  gestureCenter,
   minZoom,
   pannedCenter,
   scaleOf,
@@ -106,6 +107,22 @@ export function zoomBy(ctx: AppContext, factor: number, anchor?: Point): void {
   }
   if (!Number.isFinite(z)) z = 1;
   setZoom(ctx, z * 100, anchor);
+}
+
+/** Apply a moving-midpoint pinch as one state change and one render. */
+export function zoomGesture(ctx: AppContext, factor: number, from: Point, to: Point): void {
+  const info = viewportInfo(ctx);
+  const t = currentTransform(ctx);
+  if (!info || !t || !(factor > 0)) return;
+  let z = clamp(numericZoom(ctx, info) * factor, minZoom(info), MAX_ZOOM);
+  if (!Number.isFinite(z)) z = 1;
+  const fitZ = zoomOfScale(info.fitScale, info);
+  if (Math.abs(z / fitZ - 1) < 0.015) {
+    commit(ctx, { zoom: 'fit', center: { x: 0.5, y: 0.5 } });
+    return;
+  }
+  const scale = scaleOf(z, info);
+  commit(ctx, { zoom: z, center: gestureCenter(t, from, to, scale, info) });
 }
 
 export function stepZoom(ctx: AppContext, dir: 1 | -1, anchor?: Point): void {

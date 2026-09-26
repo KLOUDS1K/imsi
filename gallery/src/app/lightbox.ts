@@ -219,6 +219,11 @@ function installZoom(
   const pointers = new Map<number, Point>()
   let pinch: { distance: number; scale: number; panX: number; panY: number; mid: Point } | null = null
 
+  // Keep very large originals from jumping straight to 400% on first click.
+  // Eight times the fitted size is ample navigation range, capped at 400%,
+  // while every photo can still reach at least 100% for pixel inspection.
+  const maxScale = () => Math.min(4, Math.max(1, fitScale * 8))
+
   const bounds = () => {
     const rect = stage.getBoundingClientRect()
     const style = getComputedStyle(stage)
@@ -251,8 +256,7 @@ function installZoom(
 
   const scaleAround = (next: number, clientX: number, clientY: number) => {
     const b = bounds()
-    const max = Math.max(4, fitScale * 8)
-    next = Math.max(fitScale, Math.min(max, next))
+    next = Math.max(fitScale, Math.min(maxScale(), next))
     const cx = b.rect.left + b.rect.width / 2
     const cy = b.rect.top + b.rect.height / 2
     const sourceX = (clientX - cx - panX) / scale
@@ -301,7 +305,9 @@ function installZoom(
   stage.addEventListener('wheel', (event) => {
     if (!(event.target as Element | null)?.closest('.viewer__figure')) return
     event.preventDefault()
-    scaleAround(scale * Math.exp(-event.deltaY * 0.002), event.clientX, event.clientY)
+    const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? stage.clientHeight : 1
+    const delta = event.deltaY * unit
+    scaleAround(scale * Math.exp(-delta * (event.ctrlKey || event.metaKey ? 0.006 : 0.0015)), event.clientX, event.clientY)
   }, { passive: false, signal: listeners.signal })
 
   stage.addEventListener('pointerdown', (event) => {
@@ -340,7 +346,7 @@ function installZoom(
       const cy = b.rect.top + b.rect.height / 2
       const sourceX = (pinch.mid.x - cx - pinch.panX) / pinch.scale
       const sourceY = (pinch.mid.y - cy - pinch.panY) / pinch.scale
-      scale = Math.max(fitScale, Math.min(Math.max(4, fitScale * 8), pinch.scale * distance(values) / pinch.distance))
+      scale = Math.max(fitScale, Math.min(maxScale(), pinch.scale * distance(values) / pinch.distance))
       panX = currentMid.x - cx - sourceX * scale
       panY = currentMid.y - cy - sourceY * scale
       if (scale > fitScale + 0.001) demandFull()
@@ -391,20 +397,33 @@ function installZoom(
     if (wasMoved) return
     if (onPhoto) {
       if (zoomed) reset()
-      else scaleAround(Math.max(0.5, fitScale * 1.5), event.clientX, event.clientY)
+      // First click/tap is a gentle 2× fitted view (never beyond 100%),
+      // anchored exactly where the user pointed.
+      else scaleAround(Math.min(maxScale(), Math.min(1, fitScale * 2)), event.clientX, event.clientY)
     } else if (target === stage) {
       close()
     }
   }
   stage.addEventListener('pointerup', endPointer, { signal: listeners.signal })
+  stage.addEventListener('lostpointercapture', endPointer, { signal: listeners.signal })
   stage.addEventListener('pointercancel', (event) => {
-    pointers.delete(event.pointerId)
+    pointers.clear()
     start = null
     pinch = null
     moved = false
     startOnPhoto = false
     figure.classList.remove('is-dragging')
   }, { signal: listeners.signal })
+
+  const resetInteraction = () => {
+    pointers.clear()
+    start = null
+    pinch = null
+    moved = false
+    startOnPhoto = false
+    figure.classList.remove('is-dragging')
+  }
+  window.addEventListener('blur', resetInteraction, { signal: listeners.signal })
 
   // Older iOS Safari emits gesture events in addition to Pointer Events. If
   // they reach the page, Safari zooms the whole UI after the image snaps back.

@@ -15,6 +15,7 @@
  * measured noise (20·σ² for the 4-neighbour kernel) is subtracted first so
  * grain does not read as detail.
  */
+import type { NoiseParams } from '../types';
 import type { LumaPlane } from './buffer';
 import { clamp01, laplacian, quantile, sobel } from './stats';
 
@@ -71,6 +72,29 @@ export function noiseLevel(sigma: number, iso?: number): number {
   if (!iso || !(iso > 0)) return Math.round(measured);
   const isoLevel = Math.max(0, Math.min(100, 22 * Math.log2(iso / 100)));
   return Math.round(0.72 * measured + 0.28 * isoLevel);
+}
+
+/**
+ * Turn the measured 0..100 noise score into a conservative, fully undoable
+ * Detail-panel preset. Low-noise files stay on the cheap manual filters;
+ * genuinely noisy files use the multi-scale pass and reduce the manual luma
+ * amount so the two stages do not over-smooth texture.
+ */
+export function recommendNoiseReduction(level: number): NoiseParams {
+  const n = Math.max(0, Math.min(100, Number.isFinite(level) ? level : 0));
+  const smart = n >= 52;
+  const round = (v: number) => Math.round(Math.max(0, Math.min(100, v)));
+  return {
+    luminance: smart ? round((n - 42) * 0.28) : round((n - 12) * 0.72),
+    luminanceDetail: round(72 - n * 0.3),
+    luminanceContrast: round(Math.max(0, n - 32) * 0.28),
+    color: n < 8 ? 0 : round(12 + n * 0.34),
+    colorDetail: round(68 - n * 0.22),
+    colorSmoothness: round(42 + n * 0.24),
+    aiDenoise: smart,
+    aiDenoiseStrength: smart ? round(30 + (n - 52) * 1.05) : 50,
+    detailPreservation: round(76 - n * 0.25),
+  };
 }
 
 export interface SharpnessMeasure {

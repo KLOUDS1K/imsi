@@ -3,8 +3,9 @@
  * vignette, grain, bloom / glow / halation) and Calibration sections.
  */
 import type { AppContext } from '@/app/context';
+import { analyzeImage, recommendNoiseReduction } from '@/editor/analysis';
 import { Disposer, h } from '@/ui/dom';
-import { createBadge, hueGradient, tintGradient, type Section } from '@/ui/kit';
+import { createBadge, createButton, hueGradient, tintGradient, type Section } from '@/ui/kit';
 import { type DocBinder, paramSection, paramSlider, paramToggle } from '../binding';
 import { createSubgroup } from '../subgroup';
 
@@ -12,7 +13,7 @@ const SHARPEN = ['detail.sharpenAmount', 'detail.sharpenRadius', 'detail.sharpen
 const NR = ['noise.luminance', 'noise.luminanceDetail', 'noise.luminanceContrast', 'noise.color', 'noise.colorDetail', 'noise.colorSmoothness'];
 const AI_NR = ['noise.aiDenoise', 'noise.aiDenoiseStrength', 'noise.detailPreservation'];
 
-export function createDetailSection(_ctx: AppContext, b: DocBinder, d: Disposer): Section {
+export function createDetailSection(ctx: AppContext, b: DocBinder, d: Disposer): Section {
   const section = paramSection(b, d, { id: 'develop.detail', title: 'Detail', paths: [...SHARPEN, ...NR, ...AI_NR], open: false });
 
   const sharpen = createSubgroup(b, d, { title: 'Sharpening', paths: SHARPEN, id: 'sharpen' });
@@ -23,7 +24,23 @@ export function createDetailSection(_ctx: AppContext, b: DocBinder, d: Disposer)
     paramSlider(b, d, 'detail.sharpenMasking', { label: 'Masking', fill: 'min' }).el,
   );
 
-  const nr = createSubgroup(b, d, { title: 'Noise Reduction', paths: NR, id: 'nr' });
+  const autoNr = createButton({
+    label: 'Auto',
+    size: 'sm',
+    variant: 'ghost',
+    title: 'Measure this photo and set noise reduction',
+    onClick: () => {
+      const doc = ctx.doc.value;
+      if (!doc) return;
+      const measured = analyzeImage(doc.analysisProxy, doc.meta).noise.level;
+      const recommendation = recommendNoiseReduction(measured);
+      doc.store.update('Auto Noise Reduction', (p) => Object.assign(p.noise, recommendation), { coalesceKey: null });
+      ctx.toast(`Noise measured ${Math.round(measured)} / 100. Reduction adjusted.`, 'success');
+    },
+  });
+  d.add(() => autoNr.destroy());
+  d.add(b.onDoc((doc) => autoNr.setDisabled(!doc)));
+  const nr = createSubgroup(b, d, { title: 'Noise Reduction', paths: NR, actions: [autoNr.el], id: 'nr' });
   nr.body.append(
     paramSlider(b, d, 'noise.luminance', { label: 'Luminance', fill: 'min' }).el,
     paramSlider(b, d, 'noise.luminanceDetail', { label: 'Detail', ariaLabel: 'Luminance detail', fill: 'min' }).el,
@@ -33,16 +50,16 @@ export function createDetailSection(_ctx: AppContext, b: DocBinder, d: Disposer)
     paramSlider(b, d, 'noise.colorSmoothness', { label: 'Smoothness', ariaLabel: 'Color smoothness', fill: 'min' }).el,
   );
 
-  const badge = createBadge('On-device', { tone: 'outline', title: 'Runs locally in your browser (edge-aware non-local-means filter, no cloud model)' });
+  const badge = createBadge('GPU · Local', { tone: 'outline', title: 'Runs locally with a multi-scale edge-aware wavelet filter' });
   d.add(() => badge.destroy());
-  const ai = createSubgroup(b, d, { title: 'AI Denoise', paths: AI_NR, actions: [badge.el], id: 'ai-denoise' });
+  const ai = createSubgroup(b, d, { title: 'Smart Denoise', paths: AI_NR, actions: [badge.el], id: 'ai-denoise' });
   const strength = paramSlider(b, d, 'noise.aiDenoiseStrength', { label: 'Strength', fill: 'min' });
   const keep = paramSlider(b, d, 'noise.detailPreservation', { label: 'Keep Detail', ariaLabel: 'Detail preservation', fill: 'min' });
   ai.body.append(
-    paramToggle(b, d, 'noise.aiDenoise', 'Enable AI Denoise', (on) => `AI Denoise ${on ? 'On' : 'Off'}`).el,
+    paramToggle(b, d, 'noise.aiDenoise', 'Enable Smart Denoise', (on) => `Smart Denoise ${on ? 'On' : 'Off'}`).el,
     strength.el,
     keep.el,
-    h('p', { class: 'k-pnl-note' }, 'Classical edge-aware denoiser that runs on this device. Heavier than Noise Reduction; skipped while dragging.'),
+    h('p', { class: 'k-pnl-note' }, 'Multi-scale edge-aware filtering keeps strong texture while smoothing fine luma and color noise. Skipped while dragging.'),
   );
   d.add(
     b.watch(['noise.aiDenoise'], (p) => {

@@ -11,7 +11,7 @@ import { colorStats } from './color-stats';
 import { exposureStats, solveExposure, solveTone, toneInputsFromAnalysis } from './exposure';
 import { computeHistogram } from './histogram';
 import { detectLevelAngle, detectPerspective } from './level';
-import { BLURRY_BELOW, gradientPlanes, noiseLevel, noiseSigma, sharpnessRatio, sharpnessScore } from './noise';
+import { BLURRY_BELOW, gradientPlanes, noiseLevel, noiseSigma, recommendNoiseReduction, sharpnessRatio, sharpnessScore } from './noise';
 import { computeSaliency } from './saliency';
 import { drawHistogram, drawParade, drawVectorscope, drawWaveform } from './scopes';
 import { detectSkin } from './skin';
@@ -19,7 +19,7 @@ import { detectSky } from './sky';
 import { clamp01, gaussianBlur, labelComponents } from './stats';
 import { estimateWhiteBalance } from './white-balance';
 
-export { computeHistogram, detectLevelAngle, detectPerspective, drawHistogram, drawParade, drawVectorscope, drawWaveform };
+export { computeHistogram, detectLevelAngle, detectPerspective, drawHistogram, drawParade, drawVectorscope, drawWaveform, recommendNoiseReduction };
 
 const WORK = 512;
 

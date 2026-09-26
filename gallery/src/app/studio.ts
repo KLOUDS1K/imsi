@@ -102,15 +102,15 @@ export async function bootStudio(): Promise<void> {
   document.documentElement.classList.remove('is-viewing', 'is-drawer-open')
   document.body.className = 'studio-page'
 
-  const host = document.createElement('div')
-  host.id = 'app'
-  host.className = 'studio-host'
-  document.body.replaceChildren(host)
-
   const [{ mountKloudEditor }, pending] = await Promise.all([
     import('../../../src/app'),
     Promise.resolve(takePendingStudioImport() ?? activeStudioImport()),
   ])
+  const host = document.createElement('div')
+  host.id = 'app'
+  host.className = 'studio-host'
+  document.body.replaceChildren(host)
+  document.documentElement.classList.add('app-ready')
   const editor = await mountKloudEditor(host, {
     exit: { label: 'Back to photos', onExit: exitStudio },
     publish: pending

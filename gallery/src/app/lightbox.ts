@@ -397,9 +397,10 @@ function installZoom(
     if (wasMoved) return
     if (onPhoto) {
       if (zoomed) reset()
-      // First click/tap is a gentle 2× fitted view (never beyond 100%),
-      // anchored exactly where the user pointed.
-      else scaleAround(Math.min(maxScale(), Math.min(1, fitScale * 2)), event.clientX, event.clientY)
+      // First click/tap is a gentle 2× fitted view, anchored exactly where
+      // the user pointed. Small images may pass 100% so the action still has
+      // an effect; very large originals no longer jump straight to 50%.
+      else scaleAround(Math.min(maxScale(), fitScale * 2), event.clientX, event.clientY)
     } else if (target === stage) {
       close()
     }

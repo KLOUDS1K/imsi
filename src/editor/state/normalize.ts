@@ -298,7 +298,11 @@ const ordered = (a: number, b: number): [number, number] => (a <= b ? [a, b] : [
 
 function normAi(v: unknown): AiMaskParams {
   const a = isPlainObject(v) ? v : {};
-  const out: AiMaskParams = { target: oneOf(a.target, AI_MASK_TARGETS, 'subject') };
+  const out: AiMaskParams = {
+    target: oneOf(a.target, AI_MASK_TARGETS, 'subject'),
+    edgeShift: num(a.edgeShift, 0, -100, 100),
+    feather: num(a.feather, 0, 0, 100),
+  };
   const point = normPoint(a.point);
   if (point) out.point = point;
   const box = normRect(a.box);

@@ -287,6 +287,25 @@ describe('AI components & provider', () => {
     expect(b2.data[0]).toBe(0);
   });
 
+  it('AI edge shift expands/contracts coverage and feather softens the boundary', () => {
+    const W = 101;
+    const data = new Uint8Array(W * W);
+    for (let y = 40; y <= 60; y++) for (let x = 40; x <= 60; x++) data[y * W + x] = 255;
+    const store = createAiMaskStore();
+    store.set('edge', { width: W, height: W, data, key: 'edge' });
+    const render = (edgeShift: number, feather = 0) =>
+      rasterizeMask(mask([comp({ kind: 'ai', ai: { target: 'subject', bitmapKey: 'edge', edgeShift, feather } })]), { ...ctx(), aiStore: store }, W, W);
+
+    const expanded = render(100);
+    expect(at(expanded, W, 38, 50)).toBe(255);
+    const contracted = render(-100);
+    expect(at(contracted, W, 41, 50)).toBe(0);
+    expect(at(contracted, W, 50, 50)).toBe(255);
+    const softened = render(0, 100);
+    expect(at(softened, W, 39, 50)).toBeGreaterThan(0);
+    expect(at(softened, W, 39, 50)).toBeLessThan(255);
+  });
+
   it('depth changes notify; requestDepth fires once while missing', () => {
     const requestDepth = vi.fn();
     const p = createMaskProvider({ source: solid(2, 2, () => [0, 0, 0]), aiStore: createAiMaskStore(), requestDepth });

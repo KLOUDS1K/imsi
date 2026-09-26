@@ -175,7 +175,7 @@ export class MaskRasterizer {
         const ai = c.ai;
         const bmp = ai?.bitmapKey ? ctx.aiStore.get(ai.bitmapKey) : undefined;
         if (bmp) {
-          fillAi(bmp, w, h, out);
+          fillAi(bmp, w, h, out, ai);
           return;
         }
         out.fill(0);

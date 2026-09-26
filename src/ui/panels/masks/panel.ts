@@ -112,7 +112,7 @@ export function createMasksPanel(ctx: AppContext, b: DocBinder): ToolPanel {
       icon: 'plus',
       variant: 'primary',
       size: 'sm',
-      onClick: () => openMenu(createBtn.el, maskMenuItems(addMask, 'Heuristic'), { ariaLabel: 'Create new mask', minWidth: 220 }),
+      onClick: () => openMenu(createBtn.el, maskMenuItems(addMask, 'Smart'), { ariaLabel: 'Create new mask', minWidth: 220 }),
     });
     const overlay = createToggle({
       checked: ctx.showMaskOverlay.value,
@@ -249,7 +249,7 @@ export function createMasksPanel(ctx: AppContext, b: DocBinder): ToolPanel {
         label: MODE_LABEL[mode],
         icon: mode === 'add' ? 'plus' : mode === 'subtract' ? 'minus' : 'layers',
         size: 'sm',
-        onClick: () => openMenu(btn.el, maskMenuItems((c) => addComponent(maskId, c, mode), 'Heuristic'), { minWidth: 220 }),
+        onClick: () => openMenu(btn.el, maskMenuItems((c) => addComponent(maskId, c, mode), 'Smart'), { minWidth: 220 }),
       });
       inner.add(() => btn.destroy());
       addRow.append(btn.el);

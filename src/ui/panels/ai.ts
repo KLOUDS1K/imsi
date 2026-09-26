@@ -1,7 +1,7 @@
 /**
  * AI tool panel: AI Auto Edit (rule-based analysis → parameters), the image
  * analysis report, and KLOUD Style (house style + personal style learning).
- * Everything runs on-device; heuristic parts are labelled as such.
+ * Everything runs on-device; smart masks use MediaPipe with a local fallback.
  */
 import type { AppContext } from '../../app/context';
 import { analyzeImage, generateAutoEdit } from '../../editor/analysis';
@@ -227,13 +227,13 @@ export function createAiPanel(ctx: AppContext, b: DocBinder): ToolPanel {
   };
   updateSeg();
   const mlBtn = createButton({
-    label: 'Enable on-device ML models',
+    label: 'Prepare smart masks',
     icon: 'cpu',
     size: 'sm',
     onClick: () =>
       void enableMlBackend().then((ok) => {
         updateSeg();
-        ctx.toast(ok ? 'On-device ML models ready.' : 'ML models are unavailable here; heuristic masks stay active.', ok ? 'success' : 'info');
+        ctx.toast(ok ? 'MediaPipe smart masks are ready.' : 'MediaPipe is unavailable here; enhanced local masks stay active.', ok ? 'success' : 'info');
       }),
   });
   d.add(() => [autoSlider, autoBtn, analyseBtn, mlBtn].forEach((c) => c.destroy()));

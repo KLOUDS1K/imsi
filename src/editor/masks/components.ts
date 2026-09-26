@@ -7,6 +7,7 @@ import type {
   DepthRangeParams,
   LinearGradientParams,
   LuminanceRangeParams,
+  AiMaskParams,
   MaskBitmap,
   RadialGradientParams,
 } from '@/editor/types';
@@ -201,7 +202,77 @@ export function fillColorRange(p: ColorRangeParams, f: SourceFeatures, w: number
   }
 }
 
-/** AI bitmap resampled to w×h (bilinear). */
-export function fillAi(bmp: MaskBitmap, w: number, h: number, out: Uint8Array): void {
+function extremePass(src: Uint8Array, dst: Uint8Array, w: number, h: number, radius: number, horizontal: boolean, dilate: boolean): void {
+  const lines = horizontal ? h : w;
+  const length = horizontal ? w : h;
+  const stride = horizontal ? 1 : w;
+  const queue = new Int32Array(length);
+  for (let line = 0; line < lines; line++) {
+    const base = horizontal ? line * w : line;
+    let head = 0, tail = 0, right = -1;
+    for (let pos = 0; pos < length; pos++) {
+      const end = Math.min(length - 1, pos + radius);
+      while (right < end) {
+        right++;
+        const value = src[base + right * stride]!;
+        while (tail > head) {
+          const previous = src[base + queue[tail - 1]! * stride]!;
+          if (dilate ? previous > value : previous < value) break;
+          tail--;
+        }
+        queue[tail++] = right;
+      }
+      const start = pos - radius;
+      while (head < tail && queue[head]! < start) head++;
+      dst[base + pos * stride] = src[base + queue[head]! * stride]!;
+    }
+  }
+}
+
+function shiftEdge(data: Uint8Array, w: number, h: number, amount: number): void {
+  const radius = Math.min(32, Math.round((Math.abs(amount) / 100) * Math.min(w, h) * 0.018));
+  if (!radius) return;
+  const tmp = new Uint8Array(data.length);
+  const src = data.slice();
+  const dilate = amount > 0;
+  extremePass(src, tmp, w, h, radius, true, dilate);
+  extremePass(tmp, data, w, h, radius, false, dilate);
+}
+
+function featherEdge(data: Uint8Array, w: number, h: number, amount: number): void {
+  const radius = Math.min(28, Math.round((amount / 100) * Math.min(w, h) * 0.014));
+  if (!radius) return;
+  const tmp = new Uint8Array(data.length);
+  for (let y = 0; y < h; y++) {
+    let sum = 0;
+    for (let x = 0; x <= Math.min(w - 1, radius); x++) sum += data[y * w + x]!;
+    for (let x = 0; x < w; x++) {
+      const count = Math.min(w - 1, x + radius) - Math.max(0, x - radius) + 1;
+      tmp[y * w + x] = Math.round(sum / count);
+      const remove = x - radius;
+      const add = x + radius + 1;
+      if (remove >= 0) sum -= data[y * w + remove]!;
+      if (add < w) sum += data[y * w + add]!;
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    let sum = 0;
+    for (let y = 0; y <= Math.min(h - 1, radius); y++) sum += tmp[y * w + x]!;
+    for (let y = 0; y < h; y++) {
+      const count = Math.min(h - 1, y + radius) - Math.max(0, y - radius) + 1;
+      data[y * w + x] = Math.round(sum / count);
+      const remove = y - radius;
+      const add = y + radius + 1;
+      if (remove >= 0) sum -= tmp[remove * w + x]!;
+      if (add < h) sum += tmp[add * w + x]!;
+    }
+  }
+}
+
+/** AI bitmap resampled to w×h, with non-destructive edge refinement. */
+export function fillAi(bmp: MaskBitmap, w: number, h: number, out: Uint8Array, params?: Pick<AiMaskParams, 'edgeShift' | 'feather'>): void {
   resamplePlane(bmp.data, bmp.width, bmp.height, w, h, out);
+  if (!params) return;
+  shiftEdge(out, w, h, params.edgeShift ?? 0);
+  featherEdge(out, w, h, params.feather ?? 0);
 }

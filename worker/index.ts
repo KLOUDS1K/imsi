@@ -17,7 +17,7 @@ const CSP = [
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: blob:",
   "worker-src 'self' blob:",
-  "connect-src 'self' https://cloudflareinsights.com",
+  "connect-src 'self' https://cloudflareinsights.com https://storage.googleapis.com",
   "form-action 'self'",
   "base-uri 'none'",
   "frame-ancestors 'none'",

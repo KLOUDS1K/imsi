@@ -8,7 +8,7 @@ import type { Mask, MaskComponent } from '@/editor/types';
 import { Disposer, h } from '@/ui/dom';
 import { createButton, createSlider, createToggle, greyGradient, logScale } from '@/ui/kit';
 import { type DocBinder, paramRange, paramSlider } from '../binding';
-import { AI_LABEL, drawToolFor } from './create';
+import { AI_LABEL, drawToolFor, newComponent } from './create';
 
 export interface ComponentRef {
   maskIndex: number;
@@ -173,9 +173,31 @@ export function buildComponentSettings(ctx: AppContext, b: DocBinder, d: Dispose
         },
       });
       d.add(() => redo.destroy());
+      const correction = (mode: 'add' | 'subtract') => {
+        const r = resolve();
+        if (!r) return;
+        const brush = newComponent(ctx.newId('mc'), { kind: 'brush' }, mode);
+        b.store?.update(`${mode === 'add' ? 'Add' : 'Subtract'} mask correction`, (p) => {
+          p.masks[r.maskIndex]?.components.push(brush);
+        }, { coalesceKey: null });
+        ctx.activeMaskId.set(r.mask.id);
+        ctx.brush.set({ ...ctx.brush.value, autoMask: true });
+        ctx.maskDrawTool.set('brush');
+        ctx.toast(`${mode === 'add' ? 'Add' : 'Subtract'} correction ready — paint over the photo.`, 'info');
+      };
+      const add = createButton({ label: 'Add Paint', icon: 'plus', size: 'sm', onClick: () => correction('add') });
+      const subtract = createButton({ label: 'Subtract Paint', icon: 'minus', size: 'sm', onClick: () => correction('subtract') });
+      d.add(() => {
+        add.destroy();
+        subtract.destroy();
+      });
       el.append(
         h('div', { class: 'k-pnl-sub__head' }, h('span', { class: 'k-pnl-sub__title' }, AI_LABEL[target]), h('span', { class: 'k-pnl-sub__spacer' }), target === 'object' ? arm('Select') : redo.el),
         status,
+        paramSlider(b, d, `${p0}.ai.edgeShift`, { label: 'Edge Shift', spec: { min: -100, max: 100, step: 1, def: 0 }, resolvePath: () => (base() ? `${base()}.ai.edgeShift` : null) }).el,
+        paramSlider(b, d, `${p0}.ai.feather`, { label: 'Feather', spec: { min: 0, max: 100, step: 1, def: 0 }, fill: 'min', resolvePath: () => (base() ? `${base()}.ai.feather` : null) }).el,
+        h('div', { class: 'k-pnl-row k-pnl-row--buttons' }, add.el, subtract.el),
+        h('p', { class: 'k-pnl-note' }, 'Shift the detected edge, then paint with Auto Mask to fix any remaining missed areas.'),
       );
       break;
     }

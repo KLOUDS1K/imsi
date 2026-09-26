@@ -126,9 +126,12 @@ test('lightbox prefers edits, switches versions, exposes both downloads, and zoo
 
   const figure = page.locator('.viewer__figure');
   await figure.click({ position: { x: 0, y: 0 } });
-  await expect(page.locator('.viewer__stage')).toHaveClass(/is-zoomed/);
+  const stage = page.locator('.viewer__stage');
+  await expect(stage).toHaveClass(/is-zoomed/);
   const beforeWheel = await figure.evaluate((node) => getComputedStyle(node).transform);
-  await figure.hover({ position: { x: 0, y: 0 } });
+  // Once zoomed, the stage intentionally owns wheel/pan input and sits above
+  // the transformed figure. Move over that real input surface.
+  await stage.hover({ position: { x: 8, y: 8 } });
   await page.mouse.wheel(0, -200);
   const afterWheel = await figure.evaluate((node) => getComputedStyle(node).transform);
   expect(afterWheel).not.toBe(beforeWheel);

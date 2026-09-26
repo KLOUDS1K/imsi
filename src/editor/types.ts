@@ -381,8 +381,13 @@ export interface EffectsParams {
   grainSize: number;
   /** 0..100, default 50 */
   grainRoughness: number;
-  /** 0..100 each */
+  /** Bloom amount, 0..100. */
   bloom: number;
+  /** Brightness gate for bloom, 0 = midtones, 100 = only the hottest highlights. */
+  bloomThreshold: number;
+  /** Bloom spread, 0 = tight, 100 = very wide. */
+  bloomRadius: number;
+  /** 0..100 each */
   glow: number;
   halation: number;
 }

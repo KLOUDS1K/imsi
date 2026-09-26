@@ -150,6 +150,24 @@ test.describe.serial('KLOUD Studio', () => {
     expect(after).toBeLessThan(exp);
   });
 
+  test('Bloom exposes independent controls and a photo-aware Auto action', async () => {
+    const section = page.locator('[data-section="develop.effects"]');
+    const toggle = section.getByRole('button', { name: /Effects & Bloom/ });
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+    await expect(section.getByRole('slider', { name: 'Bloom amount' })).toBeVisible();
+    await expect(section.getByRole('slider', { name: 'Bloom threshold' })).toBeVisible();
+    await expect(section.getByRole('slider', { name: 'Bloom radius' })).toBeVisible();
+
+    await section.locator('[data-group="bloom"]').getByRole('button', { name: 'Auto' }).click();
+    const effects = (await params(page)).effects;
+    expect(effects.bloom).toBeGreaterThanOrEqual(0);
+    expect(effects.bloomThreshold).toBeGreaterThanOrEqual(0);
+    expect(effects.bloomRadius).toBeGreaterThan(0);
+    expect(await lastHistory(page)).toBe('Auto Bloom');
+    await k(page, (rt) => rt.ctx.doc.value.store.reset('Reset All'));
+    await settle(page);
+  });
+
   test('tone curve, HSL, grading, detail and effects all change the render', async () => {
     const edits: [string, unknown][] = [
       ['toneCurve.rgb', [{ x: 0, y: 0 }, { x: 0.5, y: 0.65 }, { x: 1, y: 1 }]],

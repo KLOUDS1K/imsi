@@ -65,6 +65,8 @@ function fullyEdited(): EditParams {
     grainSize: 20,
     grainRoughness: 45,
     bloom: 14,
+    bloomThreshold: 63,
+    bloomRadius: 72,
     glow: 6,
     halation: 38,
   };

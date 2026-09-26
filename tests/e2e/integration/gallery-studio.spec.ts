@@ -13,6 +13,35 @@ test('first paint shows the branded boot shell instead of raw controls', async (
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
 });
 
+test('gallery and Studio share one persisted light/dark theme', async ({ page }) => {
+  await page.route('**/api/tree', (route) => route.fulfill({ json: { folders: [], admin: true, siteTitle: 'KLOUD.PHOTOGRAPHY' } }));
+  await page.route('**/api/browse?**', (route) => route.fulfill({ json: { folder: null, path: [], folders: [], photos: [], admin: true, lock: null } }));
+  await page.route('**/api/admin/session', (route) => route.fulfill({ json: { authenticated: true, username: 'test' } }));
+  await page.route('**/api/hit', (route) => route.fulfill({ json: { ok: true } }));
+
+  await page.goto('/');
+  await page.evaluate(() => {
+    localStorage.setItem('kloud-theme', 'dark');
+    localStorage.setItem('kloud.explorer.prefs', JSON.stringify({ view: 'grid', sortKey: 'date', sortDir: 'desc', theme: 'light', expanded: [] }));
+  });
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+  await page.locator('[data-role="theme"]').click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('kloud-theme'))).toBe('light');
+
+  await page.goto('/studio');
+  await page.waitForFunction(() => !!(window as unknown as { __kloud?: unknown }).__kloud);
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.getByRole('button', { name: 'Switch to dark theme' }).first().click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('kloud-theme'))).toBe('dark');
+
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+});
+
 test('gallery opens a stored original directly in Studio', async ({ page }) => {
   const photo = {
     id: PHOTO_ID,

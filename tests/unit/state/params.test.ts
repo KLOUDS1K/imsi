@@ -117,6 +117,7 @@ describe('normalizeParams', () => {
       crop: { x: 0.9, y: -1, w: 0.5, h: 3, orientation: 450, aspect: '7:3', customAspect: [0, 2], flipH: 'yes' },
       transform: { upright: 'guided', scale: 1000 },
       lens: { profileId: 42, defringe: { purpleHueMin: 350, purpleHueMax: 300 } },
+      effects: { bloom: 150, bloomThreshold: -20, bloomRadius: 'wide' },
       extra: { a: 1 },
     });
     expect(p.basic).toEqual({ exposure: 5, contrast: -100, highlights: 25, shadows: 0, whites: 0, blacks: 0 });
@@ -138,6 +139,9 @@ describe('normalizeParams', () => {
     expect(p.transform.scale).toBe(150);
     expect(p.lens.profileId).toBeNull();
     expect(p.lens.defringe.purpleHueMin).toBeLessThanOrEqual(p.lens.defringe.purpleHueMax);
+    expect(p.effects.bloom).toBe(100);
+    expect(p.effects.bloomThreshold).toBe(0);
+    expect(p.effects.bloomRadius).toBe(50);
     expect((p as unknown as Record<string, unknown>).extra).toBeUndefined();
   });
 

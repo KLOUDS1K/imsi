@@ -3,7 +3,7 @@
  * vignette, grain, bloom / glow / halation) and Calibration sections.
  */
 import type { AppContext } from '@/app/context';
-import { analyzeImage, recommendNoiseReduction } from '@/editor/analysis';
+import { analyzeImage, recommendBloom, recommendNoiseReduction } from '@/editor/analysis';
 import { Disposer, h } from '@/ui/dom';
 import { createBadge, createButton, hueGradient, tintGradient, type Section } from '@/ui/kit';
 import { type DocBinder, paramSection, paramSlider, paramToggle } from '../binding';
@@ -74,10 +74,11 @@ export function createDetailSection(ctx: AppContext, b: DocBinder, d: Disposer):
 
 const VIGNETTE = ['effects.vignetteAmount', 'effects.vignetteMidpoint', 'effects.vignetteRoundness', 'effects.vignetteFeather', 'effects.vignetteHighlights'];
 const GRAIN = ['effects.grainAmount', 'effects.grainSize', 'effects.grainRoughness'];
-const GLOW = ['effects.bloom', 'effects.glow', 'effects.halation'];
+const BLOOM = ['effects.bloom', 'effects.bloomThreshold', 'effects.bloomRadius'];
+const ATMOSPHERE = ['effects.glow', 'effects.halation'];
 
-export function createEffectsSection(_ctx: AppContext, b: DocBinder, d: Disposer): Section {
-  const section = paramSection(b, d, { id: 'develop.effects', title: 'Effects', paths: [...VIGNETTE, ...GRAIN, ...GLOW], open: false });
+export function createEffectsSection(ctx: AppContext, b: DocBinder, d: Disposer): Section {
+  const section = paramSection(b, d, { id: 'develop.effects', title: 'Effects & Bloom', paths: [...VIGNETTE, ...GRAIN, ...BLOOM, ...ATMOSPHERE], open: false });
   const vig = createSubgroup(b, d, { title: 'Post-Crop Vignette', paths: VIGNETTE, id: 'vignette' });
   vig.body.append(
     paramSlider(b, d, 'effects.vignetteAmount', { label: 'Amount', ariaLabel: 'Vignette amount' }).el,
@@ -92,13 +93,39 @@ export function createEffectsSection(_ctx: AppContext, b: DocBinder, d: Disposer
     paramSlider(b, d, 'effects.grainSize', { label: 'Size', ariaLabel: 'Grain size', fill: 'min' }).el,
     paramSlider(b, d, 'effects.grainRoughness', { label: 'Roughness', fill: 'min' }).el,
   );
-  const glow = createSubgroup(b, d, { title: 'Light', paths: GLOW, id: 'glow' });
-  glow.body.append(
-    paramSlider(b, d, 'effects.bloom', { label: 'Bloom', fill: 'min' }).el,
+  const autoBloom = createButton({
+    label: 'Auto',
+    size: 'sm',
+    variant: 'ghost',
+    title: 'Measure the photo highlights and set a natural bloom starting point',
+    onClick: () => {
+      const doc = ctx.doc.value;
+      if (!doc) return;
+      const analysis = analyzeImage(doc.analysisProxy, doc.meta);
+      const recommendation = recommendBloom({
+        p99: analysis.exposure.p99,
+        clippedHighlights: analysis.dynamicRange.clippedHighlights,
+        scene: analysis.scene.label,
+      });
+      doc.store.update('Auto Bloom', (p) => Object.assign(p.effects, recommendation), { coalesceKey: null });
+      ctx.toast(recommendation.bloom > 0 ? 'Bloom matched to this photo’s highlights.' : 'No strong highlights found — bloom left off.', 'success');
+    },
+  });
+  d.add(() => autoBloom.destroy());
+  d.add(b.onDoc((doc) => autoBloom.setDisabled(!doc)));
+  const bloom = createSubgroup(b, d, { title: 'Bloom', paths: BLOOM, actions: [autoBloom.el], id: 'bloom' });
+  bloom.body.append(
+    paramSlider(b, d, 'effects.bloom', { label: 'Amount', ariaLabel: 'Bloom amount', fill: 'min' }).el,
+    paramSlider(b, d, 'effects.bloomThreshold', { label: 'Threshold', ariaLabel: 'Bloom threshold', fill: 'min' }).el,
+    paramSlider(b, d, 'effects.bloomRadius', { label: 'Radius', ariaLabel: 'Bloom radius', fill: 'min' }).el,
+    h('p', { class: 'k-pnl-note' }, 'Adds a soft highlight glow in linear light. Raise Threshold to protect midtones; Radius controls how far light spreads.'),
+  );
+  const atmosphere = createSubgroup(b, d, { title: 'Atmosphere', paths: ATMOSPHERE, id: 'atmosphere' });
+  atmosphere.body.append(
     paramSlider(b, d, 'effects.glow', { label: 'Glow', fill: 'min' }).el,
     paramSlider(b, d, 'effects.halation', { label: 'Halation', fill: 'min' }).el,
   );
-  section.body.append(vig.el, grain.el, glow.el);
+  section.body.append(bloom.el, vig.el, grain.el, atmosphere.el);
   return section;
 }
 

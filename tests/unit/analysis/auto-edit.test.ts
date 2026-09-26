@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeImage, classifyScene, generateAutoEdit, recommendNoiseReduction } from '@/editor/analysis';
+import { analyzeImage, classifyScene, generateAutoEdit, recommendBloom, recommendNoiseReduction } from '@/editor/analysis';
 import type { PhotoMeta, PixelBuffer } from '@/editor/types';
 
 /** Linear RGBA scene: a flat base level with deterministic grain and a few bright points. */
@@ -93,5 +93,33 @@ describe('automatic noise reduction', () => {
   it('clamps invalid and out-of-range measurements', () => {
     expect(recommendNoiseReduction(Number.NaN)).toEqual(recommendNoiseReduction(0));
     expect(recommendNoiseReduction(200)).toEqual(recommendNoiseReduction(100));
+  });
+});
+
+describe('automatic bloom', () => {
+  it('leaves flat dark frames untouched', () => {
+    expect(recommendBloom({ p99: 0.1, clippedHighlights: 0, scene: 'night' })).toEqual({
+      bloom: 0,
+      bloomThreshold: 55,
+      bloomRadius: 50,
+    });
+  });
+
+  it('gives night lights a wider, stronger bloom than portraits', () => {
+    const night = recommendBloom({ p99: 0.9, clippedHighlights: 0.01, scene: 'night' });
+    const portrait = recommendBloom({ p99: 0.9, clippedHighlights: 0.01, scene: 'portrait' });
+    expect(night.bloom).toBeGreaterThan(portrait.bloom);
+    expect(night.bloomRadius).toBeGreaterThan(portrait.bloomRadius);
+    expect(night.bloomThreshold).toBe(portrait.bloomThreshold);
+  });
+
+  it('sanitizes invalid and out-of-range measurements', () => {
+    expect(recommendBloom({ p99: Number.NaN, clippedHighlights: Number.NaN, scene: 'general' }).bloom).toBe(0);
+    const high = recommendBloom({ p99: 20, clippedHighlights: 20, scene: 'cityscape' });
+    expect(high.bloom).toBeGreaterThanOrEqual(0);
+    expect(high.bloom).toBeLessThanOrEqual(40);
+    expect(high.bloomThreshold).toBeGreaterThanOrEqual(0);
+    expect(high.bloomThreshold).toBeLessThanOrEqual(100);
+    expect(high.bloomRadius).toBeLessThanOrEqual(100);
   });
 });

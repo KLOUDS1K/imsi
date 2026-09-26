@@ -21,6 +21,44 @@ import { estimateWhiteBalance } from './white-balance';
 
 export { computeHistogram, detectLevelAngle, detectPerspective, drawHistogram, drawParade, drawVectorscope, drawWaveform, recommendNoiseReduction };
 
+export interface BloomRecommendationInput {
+  /** Linear-light 99th percentile from ImageAnalysis.exposure.p99. */
+  p99: number;
+  clippedHighlights: number;
+  scene: SceneLabel;
+}
+
+export interface BloomRecommendation {
+  bloom: number;
+  bloomThreshold: number;
+  bloomRadius: number;
+}
+
+/**
+ * Conservative highlight-aware bloom starting point. A frame without a real
+ * highlight gets no bloom instead of becoming hazy; night/city lights get a
+ * wider spread while portraits stay restrained.
+ */
+export function recommendBloom(input: BloomRecommendationInput): BloomRecommendation {
+  const finite = (v: number, fallback = 0) => Number.isFinite(v) ? v : fallback;
+  const p99 = clamp01(finite(input.p99));
+  const clipped = clamp01(finite(input.clippedHighlights));
+  if (p99 < 0.16) return { bloom: 0, bloomThreshold: 55, bloomRadius: 50 };
+
+  const thresholdLinear = Math.max(0.28, Math.min(0.88, p99 * 0.78));
+  const bloomThreshold = Math.round(clamp01((thresholdLinear - 0.15) / 0.8) * 100);
+  const luminousScene = input.scene === 'night' || input.scene === 'cityscape' || input.scene === 'sunset';
+  const portrait = input.scene === 'portrait' || input.scene === 'group';
+  let bloom = portrait ? 12 : luminousScene ? 26 : 18;
+  if (p99 < 0.3) bloom -= 5;
+  if (clipped > 0.02) bloom += Math.min(8, Math.round(clipped * 80));
+  return {
+    bloom: Math.max(0, Math.min(40, bloom)),
+    bloomThreshold,
+    bloomRadius: luminousScene ? 64 : portrait ? 42 : 52,
+  };
+}
+
 const WORK = 512;
 
 export function estimateNoise(px: PixelBuffer): { level: number; sigma: number } {

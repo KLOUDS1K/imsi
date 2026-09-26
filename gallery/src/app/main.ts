@@ -2,7 +2,7 @@
 import { ROOT } from '../shared/types'
 import { icon } from './icons'
 import { el, need, openMenu, toast } from './ui'
-import { applyTheme, nextTheme, state, subscribe, update } from './state'
+import { applyTheme, installThemeSync, nextTheme, state, subscribe, update } from './state'
 import { themeTransition } from './motion'
 import { initExplorer, render } from './explorer'
 import { initImageGuard } from './guard'
@@ -28,6 +28,8 @@ import '../styles/viewer.css'
 import '../styles/admin.css'
 import '../styles/motion.css'
 
+// Apply the shared Gallery/Studio choice before revealing the styled shell.
+applyTheme()
 // Static HTML is intentionally hidden by the inline first-paint shell until
 // this route's CSS chunk has loaded and evaluated. Reveal before network data
 // arrives so the styled "Opening" state remains responsive on slow links.
@@ -249,7 +251,7 @@ async function boot(): Promise<void> {
   // a first load saved a whole round trip of staring at an empty pane.
   prefetchFolder(parseRoute().folderId)
 
-  applyTheme()
+  installThemeSync()
   initImageGuard()
   initExplorer()
   initChrome()

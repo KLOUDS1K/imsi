@@ -36,6 +36,8 @@ vec3 screenAdd(vec3 base, vec3 light) { return base + light * max(1.0 - base, 0.
 /* ------------------------------------------------------------------ */
 
 const bloomAmount = (p: EditParams) => clamp01(p.effects.bloom / 100);
+const bloomRadius = (p: EditParams) => clamp01(p.effects.bloomRadius / 100);
+const bloomThreshold = (p: EditParams) => lerp(0.15, 0.95, clamp01(p.effects.bloomThreshold / 100));
 
 const BLOOM_EXTRACT: PassDef = {
   name: 'fx-bloom-extract',
@@ -53,7 +55,9 @@ void main() {
 }
 `),
   inputs: ['uInput'],
-  uniforms: (p) => ({ uThreshold: lerp(0.85, 0.35, bloomAmount(p)), uKnee: 0.35 }),
+  // Amount and highlight selection are intentionally independent: increasing
+  // the effect should not unexpectedly pull midtones into the glow.
+  uniforms: (p) => ({ uThreshold: bloomThreshold(p), uKnee: 0.22 }),
 };
 
 export const BLOOM_PASS: PassDef = {
@@ -76,8 +80,8 @@ void main() {
   ),
   inputs: ['uInput'],
   blurs: [
-    { uniform: 'uBloomNear', source: 'uInput', sigma: 10, prepass: BLOOM_EXTRACT },
-    { uniform: 'uBloomFar', source: 'uInput', sigma: 40, prepass: BLOOM_EXTRACT },
+    { uniform: 'uBloomNear', source: 'uInput', sigma: (p) => lerp(3, 17, bloomRadius(p)), prepass: BLOOM_EXTRACT },
+    { uniform: 'uBloomFar', source: 'uInput', sigma: (p) => lerp(12, 68, bloomRadius(p)), prepass: BLOOM_EXTRACT },
   ],
   uniforms: (p) => ({ uBloomAmount: bloomAmount(p) * 1.6 }),
   isIdentity: (p) => !(p.effects.bloom > 0),

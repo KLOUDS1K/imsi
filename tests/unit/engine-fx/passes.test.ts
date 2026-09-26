@@ -47,7 +47,7 @@ function extremeParams(): EditParams {
   });
   Object.assign(p.effects, {
     vignetteAmount: -100, vignetteMidpoint: 0, vignetteRoundness: -100, vignetteFeather: 0, vignetteHighlights: 100,
-    grainAmount: 100, grainSize: 100, grainRoughness: 100, bloom: 100, glow: 100, halation: 100,
+    grainAmount: 100, grainSize: 100, grainRoughness: 100, bloom: 100, bloomThreshold: 100, bloomRadius: 100, glow: 100, halation: 100,
   });
   Object.assign(p.transform, { vertical: 100, horizontal: -100, rotate: 10, aspect: -100, scale: 50, offsetX: 100, offsetY: -100 });
   Object.assign(p.crop, { angle: -45, orientation: 270, flipH: true, x: 0.1, y: 0.2, w: 0.5, h: 0.6 });
@@ -220,5 +220,26 @@ describe('fx passes: geometry + effects', () => {
     const preview = grain.uniforms(p, ctx({ outWidth: 1200, outHeight: 800 })).uGrainCells;
     const exportU = grain.uniforms(p, ctx({ outWidth: 6000, outHeight: 4000, scale: 6000 / 2560 })).uGrainCells;
     expect(preview).toEqual(exportU);
+  });
+
+  it('bloom amount, highlight threshold and spread are independent controls', () => {
+    const bloom = EFFECTS_STAGE.find((e) => e.name === 'fx-bloom')!;
+    const extract = bloom.blurs![0].prepass!;
+    const p = createDefaultParams();
+    p.effects.bloom = 50;
+
+    const amount = bloom.uniforms(p, ctx()).uBloomAmount;
+    p.effects.bloomThreshold = 0;
+    const lowThreshold = extract.uniforms(p, ctx()).uThreshold as number;
+    p.effects.bloomThreshold = 100;
+    const highThreshold = extract.uniforms(p, ctx()).uThreshold as number;
+    expect(highThreshold).toBeGreaterThan(lowThreshold);
+    expect(bloom.uniforms(p, ctx()).uBloomAmount).toBe(amount);
+
+    const sigma = bloom.blurs![1].sigma as (params: EditParams, context: PassContext) => number;
+    p.effects.bloomRadius = 0;
+    const tight = sigma(p, ctx());
+    p.effects.bloomRadius = 100;
+    expect(sigma(p, ctx())).toBeGreaterThan(tight);
   });
 });

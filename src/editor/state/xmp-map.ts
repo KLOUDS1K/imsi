@@ -180,6 +180,8 @@ export const FIELDS: Field[] = [
   num('GrainSize', 'effects.grainSize', 'effects', 0, false),
   num('GrainFrequency', 'effects.grainRoughness', 'effects', 0, false),
   knum('Bloom', 'effects.bloom', 'effects'),
+  knum('BloomThreshold', 'effects.bloomThreshold', 'effects'),
+  knum('BloomRadius', 'effects.bloomRadius', 'effects'),
   knum('Glow', 'effects.glow', 'effects'),
   knum('Halation', 'effects.halation', 'effects'),
 ];

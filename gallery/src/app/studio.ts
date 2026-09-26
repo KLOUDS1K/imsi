@@ -5,6 +5,10 @@ import type { AppContext } from '../../../src/app/context'
 import type { ExportSettings } from '../../../src/editor/types'
 import { applyTheme } from './state'
 
+// The login/session request can take a moment. Match the gallery theme while
+// the boot shell is still visible instead of waiting for the editor to mount.
+applyTheme()
+
 const resize = (edge?: number): ExportSettings['resize'] => edge
   ? { mode: 'long-edge', value: edge, width: edge, height: edge, dontEnlarge: true }
   : { mode: 'none', value: 0, width: 0, height: 0, dontEnlarge: true }
@@ -97,7 +101,6 @@ export async function bootStudio(): Promise<void> {
     requestStudioSignIn()
     return
   }
-  applyTheme()
   document.title = 'KLOUD Studio'
   document.documentElement.classList.remove('is-viewing', 'is-drawer-open')
   document.body.className = 'studio-page'

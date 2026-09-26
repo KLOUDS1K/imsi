@@ -124,6 +124,8 @@ export function createDefaultParams(isRaw = false): EditParams {
       grainSize: 25,
       grainRoughness: 50,
       bloom: 0,
+      bloomThreshold: 55,
+      bloomRadius: 50,
       glow: 0,
       halation: 0,
     },
@@ -291,6 +293,8 @@ export const PARAM_SPECS: Record<string, ParamSpec> = {
   'effects.grainSize': { min: 0, max: 100, step: 1, def: 25 },
   'effects.grainRoughness': { min: 0, max: 100, step: 1, def: 50 },
   'effects.bloom': { min: 0, max: 100, step: 1, def: 0 },
+  'effects.bloomThreshold': { min: 0, max: 100, step: 1, def: 55 },
+  'effects.bloomRadius': { min: 0, max: 100, step: 1, def: 50 },
   'effects.glow': { min: 0, max: 100, step: 1, def: 0 },
   'effects.halation': { min: 0, max: 100, step: 1, def: 0 },
 };

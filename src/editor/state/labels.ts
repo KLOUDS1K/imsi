@@ -117,6 +117,8 @@ const LABELS: Record<string, string> = {
   'effects.grainSize': 'Grain Size',
   'effects.grainRoughness': 'Grain Roughness',
   'effects.bloom': 'Bloom',
+  'effects.bloomThreshold': 'Bloom Threshold',
+  'effects.bloomRadius': 'Bloom Radius',
   'effects.glow': 'Glow',
   'effects.halation': 'Halation',
   masks: 'Masks',

@@ -36,6 +36,8 @@ export interface State {
 }
 
 const STORE_KEY = 'kloud.explorer.prefs'
+/** Shared with KLOUD Studio (`src/ui/kit/theme.ts`) on the same origin. */
+export const THEME_STORAGE_KEY = 'kloud-theme'
 
 interface Prefs {
   view: ViewMode
@@ -43,6 +45,10 @@ interface Prefs {
   sortDir: SortDir
   theme: Theme
   expanded: string[]
+}
+
+function validTheme(value: unknown): Theme | null {
+  return value === 'light' || value === 'dark' || value === 'system' ? value : null
 }
 
 function loadPrefs(): Prefs {
@@ -54,14 +60,15 @@ function loadPrefs(): Prefs {
     expanded: [],
   }
   try {
+    const shared = validTheme(localStorage.getItem(THEME_STORAGE_KEY))
     const raw = localStorage.getItem(STORE_KEY)
-    if (!raw) return fallback
+    if (!raw) return { ...fallback, theme: shared ?? fallback.theme }
     const parsed = JSON.parse(raw) as Partial<Prefs>
     return {
       view: parsed.view === 'list' ? 'list' : 'grid',
       sortKey: parsed.sortKey === 'name' || parsed.sortKey === 'size' ? parsed.sortKey : 'date',
       sortDir: parsed.sortDir === 'asc' ? 'asc' : 'desc',
-      theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : 'system',
+      theme: shared ?? validTheme(parsed.theme) ?? 'system',
       expanded: Array.isArray(parsed.expanded) ? parsed.expanded.filter((v) => typeof v === 'string') : [],
     }
   } catch {
@@ -99,6 +106,7 @@ export function subscribe(fn: Listener): () => void {
 
 function savePrefs(): void {
   try {
+    localStorage.setItem(THEME_STORAGE_KEY, state.theme)
     localStorage.setItem(
       STORE_KEY,
       JSON.stringify({
@@ -124,6 +132,36 @@ export function update(patch: Partial<State>): void {
 export function touch(): void {
   savePrefs()
   for (const fn of listeners) fn()
+}
+
+function emit(): void {
+  for (const fn of listeners) fn()
+}
+
+/**
+ * Keep an already-open gallery in step when Studio (or another gallery tab)
+ * changes the shared theme. System-theme changes also refresh the icon.
+ */
+export function installThemeSync(): () => void {
+  const media = window.matchMedia('(prefers-color-scheme: dark)')
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== THEME_STORAGE_KEY) return
+    const next = validTheme(event.newValue) ?? 'system'
+    if (state.theme === next) return
+    state.theme = next
+    savePrefs()
+    applyTheme()
+    emit()
+  }
+  const onSystem = () => {
+    if (state.theme === 'system') emit()
+  }
+  window.addEventListener('storage', onStorage)
+  media.addEventListener('change', onSystem)
+  return () => {
+    window.removeEventListener('storage', onStorage)
+    media.removeEventListener('change', onSystem)
+  }
 }
 
 // -------------------------------------------------------------------- theme

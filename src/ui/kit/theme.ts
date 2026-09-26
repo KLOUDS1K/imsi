@@ -3,8 +3,8 @@
  *
  * The theme lives on <html data-theme="light|dark">; without the attribute the
  * OS preference decides (tokens.css handles both). The choice is persisted in
- * localStorage under 'kloud-theme' (index.html re-applies it before first
- * paint).
+ * localStorage under 'kloud-theme' (each route applies it before revealing
+ * the application shell).
  *
  *   applyTheme('dark');
  *   const off = onThemeChange((resolved) => redrawCanvas(readToken('--k-accent')));
@@ -60,7 +60,7 @@ export function applyTheme(choice: ThemeChoice, opts: { persist?: boolean } = {}
   notify();
 }
 
-/** Re-apply the persisted choice (call once at startup; index.html already does it pre-paint). */
+/** Re-apply the persisted choice once during route startup. */
 export function initTheme(): ThemeChoice {
   const choice = storedThemeChoice();
   applyTheme(choice, { persist: false });
@@ -89,6 +89,7 @@ const listeners = new Set<ThemeListener>();
 let last: { resolved: ResolvedTheme; choice: ThemeChoice } | null = null;
 let observer: MutationObserver | null = null;
 let mql: MediaQueryList | null = null;
+let storageListener: ((event: StorageEvent) => void) | null = null;
 
 function notify(): void {
   if (!listeners.size) return;
@@ -117,6 +118,14 @@ export function onThemeChange(cb: ThemeListener): () => void {
     observer.observe(root(), { attributes: true, attributeFilter: ['data-theme'] });
     mql = darkQuery();
     mql?.addEventListener('change', notify);
+    storageListener = (event: StorageEvent) => {
+      if (event.key !== THEME_STORAGE_KEY) return;
+      const choice: ThemeChoice = event.newValue === 'light' || event.newValue === 'dark' || event.newValue === 'system'
+        ? event.newValue
+        : 'system';
+      applyTheme(choice, { persist: false });
+    };
+    window.addEventListener('storage', storageListener);
   }
   listeners.add(cb);
   return () => {
@@ -126,6 +135,8 @@ export function onThemeChange(cb: ThemeListener): () => void {
       observer = null;
       mql?.removeEventListener('change', notify);
       mql = null;
+      if (storageListener) window.removeEventListener('storage', storageListener);
+      storageListener = null;
       last = null;
     }
   };

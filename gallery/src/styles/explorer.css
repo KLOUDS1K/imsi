@@ -808,6 +808,15 @@
   height: 100%;
   object-fit: cover;
 }
+.row__thumb--fallback {
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+}
+.row__thumb--fallback > span {
+  width: 16px;
+  height: 16px;
+}
 
 /* ------------------------------------------------------------ empty & state */
 

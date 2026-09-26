@@ -8,6 +8,8 @@ const COLUMNS = `id, folder_id, title, taken_on, location, description, original
                  width, height, placeholder, sort_order, published, created_at, updated_at`
 
 const flag = (admin: boolean) => (admin ? 1 : 0)
+// Stay below D1/SQLite's bound-parameter ceiling even for very large trees.
+const ID_CHUNK = 80
 
 /** Prepared, not run — the folder view sends it with the rest in one batch. */
 export function inFolderStmt(env: Env, folderId: string, admin: boolean) {
@@ -49,13 +51,18 @@ export async function search(env: Env, query: string, admin: boolean): Promise<P
 /** Every photo inside the given folders — the delete path needs their R2 keys. */
 export async function listInFolders(env: Env, folderIds: string[]): Promise<PhotoRow[]> {
   if (!folderIds.length) return []
-  const marks = folderIds.map(() => '?').join(',')
-  const { results } = await env.DB.prepare(
-    `SELECT ${COLUMNS} FROM photos WHERE folder_id IN (${marks})`,
-  )
-    .bind(...folderIds)
-    .all<PhotoRow>()
-  return results ?? []
+  const rows: PhotoRow[] = []
+  for (let i = 0; i < folderIds.length; i += ID_CHUNK) {
+    const chunk = folderIds.slice(i, i + ID_CHUNK)
+    const marks = chunk.map(() => '?').join(',')
+    const { results } = await env.DB.prepare(
+      `SELECT ${COLUMNS} FROM photos WHERE folder_id IN (${marks})`,
+    )
+      .bind(...chunk)
+      .all<PhotoRow>()
+    rows.push(...(results ?? []))
+  }
+  return rows
 }
 
 export interface NewPhoto {
@@ -165,7 +172,9 @@ export async function remove(env: Env, id: string): Promise<boolean> {
 }
 
 export async function removeMany(env: Env, ids: string[]): Promise<void> {
-  if (!ids.length) return
-  const marks = ids.map(() => '?').join(',')
-  await env.DB.prepare(`DELETE FROM photos WHERE id IN (${marks})`).bind(...ids).run()
+  for (let i = 0; i < ids.length; i += ID_CHUNK) {
+    const chunk = ids.slice(i, i + ID_CHUNK)
+    const marks = chunk.map(() => '?').join(',')
+    await env.DB.prepare(`DELETE FROM photos WHERE id IN (${marks})`).bind(...chunk).run()
+  }
 }

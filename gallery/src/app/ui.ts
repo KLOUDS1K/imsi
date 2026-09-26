@@ -83,11 +83,13 @@ export function openMenu(
   const host = need('[data-role="menu"]')
   host.innerHTML = ''
   host.hidden = false
+  host.setAttribute('role', 'menu')
 
   items.forEach((item, index) => {
     const button = el('button', {
       class: `menu__item${item.danger ? ' menu__item--danger' : ''}`,
       type: 'button',
+      role: 'menuitem',
       '--i': String(index),
     }, [
       el('span', { class: 'menu__icon', html: item.icon ? icon(item.icon) : '' }),
@@ -132,6 +134,7 @@ export function openMenu(
   closeMenu = dismiss
   // Deferred so the pointerdown that opened the menu does not close it again.
   setTimeout(() => {
+    if (closeMenu !== dismiss) return
     document.addEventListener('pointerdown', dismiss, true)
     document.addEventListener('keydown', onKey, true)
     window.addEventListener('resize', dismiss)
@@ -168,6 +171,11 @@ let closeSheet: (() => void) | null = null
 
 export function openSheet(spec: SheetSpec): void {
   closeSheet?.()
+  const listeners = new AbortController()
+  const restoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  const app = document.querySelector<HTMLElement>('.app')
+  const appWasInert = app?.inert ?? false
+  if (app) app.inert = true
   const host = need('[data-role="sheet"]')
   host.innerHTML = ''
   host.hidden = false
@@ -187,10 +195,12 @@ export function openSheet(spec: SheetSpec): void {
         class: 'input input--area',
         rows: 3,
         placeholder: field.placeholder ?? '',
+        required: field.required,
+        minlength: field.minLength,
       })
       ;(control as HTMLTextAreaElement).value = field.value ?? ''
     } else if (field.type === 'select') {
-      const select = el('select', { id, name: field.name, class: 'input' })
+      const select = el('select', { id, name: field.name, class: 'input', required: field.required })
       for (const option of field.options ?? []) {
         select.append(el('option', { value: option.value, text: option.label }))
       }
@@ -205,6 +215,7 @@ export function openSheet(spec: SheetSpec): void {
         placeholder: field.placeholder ?? '',
         autocomplete: field.autocomplete ?? 'off',
         minlength: field.minLength,
+        required: field.required,
         value: field.value ?? '',
       })
     }
@@ -228,37 +239,69 @@ export function openSheet(spec: SheetSpec): void {
 
   form.append(errorEl, el('div', { class: 'sheet__actions' }, [cancel, submit]))
 
-  const card = el('div', { class: 'sheet__card', role: 'dialog', 'aria-modal': 'true' }, [
-    el('h2', { class: 'sheet__title', text: spec.title }),
+  const titleId = `sheet-title-${crypto.randomUUID()}`
+  const card = el('div', {
+    class: 'sheet__card', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId,
+  }, [
+    el('h2', { class: 'sheet__title', id: titleId, text: spec.title }),
     spec.description ? el('p', { class: 'sheet__desc', text: spec.description }) : null,
     form,
   ])
   host.append(card)
-  requestAnimationFrame(() => host.classList.add('is-open'))
 
   const dismiss = () => {
+    if (closeSheet !== dismiss) return
+    listeners.abort()
     host.classList.remove('is-open')
     host.hidden = true
     host.innerHTML = ''
-    document.removeEventListener('keydown', onKey, true)
     closeSheet = null
+    if (app) app.inert = appWasInert
+    restoreFocus?.focus?.()
   }
   const onKey = (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
       event.stopPropagation()
       dismiss()
+      return
+    }
+    if (event.key === 'Tab') {
+      const focusable = [...card.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
+      )].filter((node) => !node.hidden)
+      if (!focusable.length) {
+        event.preventDefault()
+        card.focus()
+        return
+      }
+      const first = focusable[0] as HTMLElement
+      const last = focusable[focusable.length - 1] as HTMLElement
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
   }
 
   closeSheet = dismiss
-  cancel.addEventListener('click', dismiss)
+  requestAnimationFrame(() => {
+    if (closeSheet === dismiss) host.classList.add('is-open')
+  })
+  cancel.addEventListener('click', dismiss, { signal: listeners.signal })
   host.addEventListener('pointerdown', (event) => {
     if (event.target === host) dismiss()
-  })
-  document.addEventListener('keydown', onKey, true)
+  }, { signal: listeners.signal })
+  document.addEventListener('keydown', onKey, { capture: true, signal: listeners.signal })
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault()
+    if (!form.checkValidity()) {
+      form.reportValidity()
+      return
+    }
     errorEl.hidden = true
     submit.disabled = true
     const values: Record<string, string> = {}
@@ -280,7 +323,7 @@ export function openSheet(spec: SheetSpec): void {
       errorEl.hidden = false
       submit.disabled = false
     }
-  })
+  }, { signal: listeners.signal })
 
   const first = inputs[0] as HTMLInputElement | undefined
   ;(first ?? submit).focus()

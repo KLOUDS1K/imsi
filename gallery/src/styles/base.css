@@ -173,6 +173,12 @@ html.is-drawer-open {
   overflow: hidden;
 }
 
+html.is-viewing,
+html.is-viewing body {
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
 h1,
 h2,
 p,

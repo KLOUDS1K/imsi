@@ -26,6 +26,35 @@ const QUICK: { label: string; apply: (s: ExportSettings) => void }[] = [
 ];
 
 const POSITIONS: WatermarkPosition[] = ['top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right'];
+const WATERMARK_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const WATERMARK_IMAGE_TYPES = new Set(['image/png', 'image/svg+xml', 'image/webp', 'image/jpeg']);
+
+async function readWatermarkImage(file: File): Promise<string> {
+  if (file.size < 1 || file.size > WATERMARK_IMAGE_MAX_BYTES) {
+    throw new Error('Watermark images must be smaller than 5 MB.');
+  }
+  if (!WATERMARK_IMAGE_TYPES.has(file.type)) {
+    throw new Error('Use a PNG, SVG, WebP, or JPEG watermark image.');
+  }
+  const data = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('The watermark image could not be read.'));
+    reader.onload = () => resolve(String(reader.result));
+    reader.readAsDataURL(file);
+  });
+  const probe = new Image();
+  probe.decoding = 'async';
+  probe.src = data;
+  try {
+    await probe.decode();
+  } catch {
+    throw new Error('The watermark image is damaged or unsupported.');
+  }
+  if (probe.naturalWidth > 20_000 || probe.naturalHeight > 20_000) {
+    throw new Error('The watermark image dimensions are too large.');
+  }
+  return data;
+}
 
 function field(label: string, ...controls: (Node | string | null)[]): HTMLElement {
   return h('label', { class: 'k-exp__field' }, h('span', { class: 'k-exp__label' }, label), h('span', { class: 'k-exp__ctl' }, ...controls));
@@ -303,15 +332,17 @@ export function openExportDialog(ctx: AppContext, photoIds: string[]): void {
     const logo = h('input', {
       type: 'file',
       accept: 'image/png,image/svg+xml,image/webp,image/jpeg',
-      onchange: (e: Event) => {
-        const f = (e.target as HTMLInputElement).files?.[0];
+      onchange: async (e: Event) => {
+        const input = e.target as HTMLInputElement;
+        const f = input.files?.[0];
         if (!f) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          wm.imageDataUrl = String(reader.result);
+        try {
+          wm.imageDataUrl = await readWatermarkImage(f);
           refresh();
-        };
-        reader.readAsDataURL(f);
+        } catch (error) {
+          input.value = '';
+          ctx.toast(error instanceof Error ? error.message : 'The watermark image could not be loaded.', 'error');
+        }
       },
     });
     const sharpOn = createToggle({ checked: s.outputSharpening.enabled, label: 'Sharpen for', size: 'sm', onChange: (v) => (s.outputSharpening.enabled = v) });

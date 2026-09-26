@@ -153,8 +153,9 @@ export async function mediaHref(
   env: Env,
   kind: 't' | 'p' | 'o' | 'et' | 'ep' | 'e',
   photoId: string,
+  version?: string | null,
 ): Promise<string> {
-  return mediaPath(kind, photoId, await mediaToken(env, photoId))
+  return mediaPath(kind, photoId, await mediaToken(env, photoId), version)
 }
 
 /**
@@ -163,8 +164,14 @@ export async function mediaHref(
  * once per photo rather than once per URL is the difference between one HMAC
  * per row and three.
  */
-export function mediaPath(kind: 't' | 'p' | 'o' | 'et' | 'ep' | 'e', photoId: string, token: string): string {
-  return `/media/${kind}/${photoId}?t=${token}`
+export function mediaPath(
+  kind: 't' | 'p' | 'o' | 'et' | 'ep' | 'e',
+  photoId: string,
+  token: string,
+  version?: string | null,
+): string {
+  const suffix = version ? `&v=${encodeURIComponent(version)}` : ''
+  return `/media/${kind}/${photoId}?t=${token}${suffix}`
 }
 
 // -------------------------------------------------------------------- grants

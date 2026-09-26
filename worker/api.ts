@@ -6,7 +6,7 @@
  * memory. Instead each part is PUT as a raw stream straight into R2, and a
  * final small JSON call commits the metadata row.
  */
-import type { Env, FolderEntry, FolderRow, PhotoRow, PublicPhoto } from './types'
+import type { Env, FolderRow, PhotoRow, PublicPhoto } from './types'
 import { ROOT, toPublicFolder, toPublicPhoto } from './types'
 import {
   json,
@@ -15,6 +15,7 @@ import {
   contentDisposition,
   inlineImageType,
   badRequest,
+  readJsonObject,
 } from './http'
 import {
   requireSession,
@@ -39,7 +40,22 @@ import {
   readGrants,
   rotateSigningKey,
 } from './lock'
-import { keys, putOriginal, putDerivative, deleteObjects, serveObject } from './storage'
+import {
+  keys,
+  putOriginal,
+  putDerivative,
+  deleteObjects,
+  serveObject,
+  imageBytesMatch,
+  listObjectKeys,
+} from './storage'
+import {
+  assertWithinLimit,
+  clearFailures,
+  consumeLimit,
+  rateLimitKey,
+  recordFailure,
+} from './rate-limit'
 import {
   newVisitorId,
   readStats,
@@ -53,6 +69,14 @@ import {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const REVISION_RE = /^[A-Za-z0-9_-]{8,64}$/
 const SAFE_IMAGE_RE = /^image\/(jpeg|png|webp|avif)$/
+const LOGIN_LIMIT = 5
+const LOGIN_GLOBAL_LIMIT = 20
+const LOGIN_WINDOW_SEC = 15 * 60
+const UNLOCK_LIMIT = 10
+const UNLOCK_WINDOW_SEC = 10 * 60
+const HIT_LIMIT = 300
+const HIT_WINDOW_SEC = 60 * 60
+const DERIVATIVE_MAX_BYTES = 25 * 1024 * 1024
 
 function assertId(id: string | undefined): string {
   if (!id || !UUID_RE.test(id)) badRequest('Invalid id')
@@ -70,6 +94,34 @@ function positiveDimension(value: unknown, label: string): number {
   return n
 }
 
+function optionalDimension(value: unknown, label: string): number | null {
+  if (value === undefined || value === null || value === '') return null
+  return positiveDimension(value, label)
+}
+
+function finiteInteger(value: unknown, label: string): number {
+  const n = Number(value)
+  if (!Number.isFinite(n)) badRequest(`Invalid ${label}`)
+  return Math.max(-2_147_483_648, Math.min(2_147_483_647, Math.trunc(n)))
+}
+
+function booleanValue(value: unknown, label: string): boolean {
+  if (typeof value !== 'boolean') badRequest(`Invalid ${label}`)
+  return value
+}
+
+function declaredLength(request: Request, required = false): number | null {
+  const raw = request.headers.get('content-length')
+  if (!raw) {
+    if (required) throw new HttpError(411, 'Content-Length is required')
+    return null
+  }
+  if (!/^\d+$/.test(raw)) badRequest('Invalid Content-Length')
+  const size = Number(raw)
+  if (!Number.isSafeInteger(size)) badRequest('Invalid Content-Length')
+  return size
+}
+
 /** '' is the root of the tree and is always a legal destination. */
 function assertFolderId(id: unknown): string {
   if (id === undefined || id === null || id === '') return ROOT
@@ -80,8 +132,12 @@ function assertFolderId(id: unknown): string {
 /** Keeps unicode (Korean filenames survive) but removes anything path-like. */
 function safeFilename(name: string): string {
   const base = name.split(/[\\/]/).pop() ?? 'photo'
-  const cleaned = base.replace(/[\x00-\x1f\x7f]/g, '').replace(/^\.+/, '').trim()
-  return cleaned.slice(0, 200) || 'photo'
+  const cleaned = base
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '_')
+    .replace(/^\.+/, '')
+    .trim()
+  return [...cleaned].slice(0, 200).join('') || 'photo'
 }
 
 /**
@@ -99,6 +155,13 @@ function decodeFilenameHeader(raw: string): string {
 function isoDateOrNull(v: unknown): string | null {
   if (typeof v !== 'string' || !v) return null
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) badRequest('Date must be YYYY-MM-DD')
+  const [year, month, day] = v.split('-').map(Number)
+  const parsed = new Date(Date.UTC(year as number, (month as number) - 1, day))
+  if (
+    parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() + 1 !== month
+    || parsed.getUTCDate() !== day
+  ) badRequest('Date is not valid')
   return v
 }
 
@@ -168,17 +231,21 @@ function publicPhotos(env: Env, rows: PhotoRow[], admin: boolean): Promise<Publi
       // One token per photo, three URLs from it — a listing of a hundred photos
       // signs a hundred times rather than three hundred.
       const token = await mediaToken(env, row.id)
-      const originalThumb = mediaPath('t', row.id, token)
+      const original = mediaPath('o', row.id, token)
       const originalPreview = row.preview_key ? mediaPath('p', row.id, token) : null
-      const edited = row.edited_key ? mediaPath('e', row.id, token) : null
-      const editedPreview = row.edited_preview_key ? mediaPath('ep', row.id, token) : null
-      const editedThumb = row.edited_thumb_key ? mediaPath('et', row.id, token) : null
+      const originalThumb = row.thumb_key
+        ? mediaPath('t', row.id, token)
+        : originalPreview ?? original
+      const editVersion = row.edited_key?.split('/')[2] ?? null
+      const edited = row.edited_key ? mediaPath('e', row.id, token, editVersion) : null
+      const editedPreview = row.edited_preview_key ? mediaPath('ep', row.id, token, editVersion) : null
+      const editedThumb = row.edited_thumb_key ? mediaPath('et', row.id, token, editVersion) : null
       return toPublicPhoto(
         row,
         admin,
         editedThumb ?? editedPreview ?? edited ?? originalThumb,
         editedPreview ?? edited ?? originalPreview,
-        mediaPath('o', row.id, token),
+        original,
         originalThumb,
         originalPreview,
         edited,
@@ -190,10 +257,15 @@ function publicPhotos(env: Env, rows: PhotoRow[], admin: boolean): Promise<Publi
 }
 
 /** Folder covers arrive as ids; the explorer needs signed URLs. */
-async function signCovers(env: Env, entries: FolderEntry[]): Promise<void> {
+async function signCovers(env: Env, entries: folders.FolderEntryWithCoverRefs[]): Promise<void> {
   await Promise.all(
     entries.map(async (entry) => {
-      entry.covers = await Promise.all(entry.covers.map((id) => mediaHref(env, 't', id)))
+      entry.covers = await Promise.all(
+        (entry.coverRefs ?? []).map((cover) =>
+          mediaHref(env, cover.kind, cover.id, cover.version),
+        ),
+      )
+      delete entry.coverRefs
     }),
   )
 }
@@ -208,7 +280,7 @@ function sharePassword(v: unknown): string {
 
 /** A dummy hash so a missing username costs the same time as a wrong password. */
 const DUMMY_HASH =
-  'pbkdf2$210000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+  'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
 
 export async function handleApi(
   request: Request,
@@ -382,6 +454,9 @@ export async function handleApi(
       const filename = edited ? row.edited_filename : row.original_filename
       const storedType = edited ? row.edited_type : row.original_type
       if (!key || !filename) return error(404, edited ? 'Edited file not found' : 'Not found')
+      if (edited && signed && url.searchParams.get('v') !== key.split('/')[2]) {
+        return error(404, 'This edited image link is no longer current')
+      }
       const type = inlineImageType(filename, storedType ?? '')
       // Inline is only ever offered for something that is actually a picture.
       // Anything else is handed over as a file, so this route can never be
@@ -406,6 +481,10 @@ export async function handleApi(
       const row = await photos.getById(env, id)
       if (!row) return error(404, 'Not found')
       key = media[1] === 'et' ? row.edited_thumb_key : row.edited_preview_key
+      const version = row.edited_key?.split('/')[2] ?? null
+      if (signed && url.searchParams.get('v') !== version) {
+        return error(404, 'This edited image link is no longer current')
+      }
     }
     if (!key) return error(404, 'Not found')
     const res = await serveObject(env, key, request, shareable)
@@ -453,7 +532,10 @@ export async function handleApi(
    */
   if (path === '/api/hit' && method === 'POST') {
     assertSameOrigin(request)
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    const body = await readJsonObject(request, 4 * 1024)
+
+    if (await getSession(env, request)) return json({ ok: true })
+    await consumeLimit(env, await rateLimitKey(request, 'hit'), HIT_LIMIT, HIT_WINDOW_SEC)
 
     let visitor = visitorFrom(request)
     const headers: Record<string, string> = {}
@@ -462,30 +544,42 @@ export async function handleApi(
       headers['set-cookie'] = visitorCookie(visitor, secure)
     }
 
-    if (!(await getSession(env, request))) {
-      if (body.visit === true) ctx.waitUntil(recordVisit(env, visitor))
-      if (typeof body.folder === 'string') {
-        const folderId = assertFolderId(body.folder)
+    if (body.visit === true) ctx.waitUntil(recordVisit(env, visitor))
+    if (typeof body.folder === 'string') {
+      const folderId = assertFolderId(body.folder)
+      if (folderId === ROOT) {
         ctx.waitUntil(recordFolderView(env, folderId))
+      } else {
+        const trail = await folders.pathOf(env, folderId)
+        const folder = trail[trail.length - 1]
+        if (
+          folder?.id === folderId
+          && trail.every((row) => row.published === 1)
+          && !(await lockedAncestor(env, trail, readGrants(request), false))
+        ) ctx.waitUntil(recordFolderView(env, folderId))
       }
     }
     return json({ ok: true }, { headers })
   }
 
-  // Opening a locked folder. The only brake on guessing is that verifying a
-  // password costs a full PBKDF2 pass, which is deliberate.
+  // Opening a locked folder. Each address/folder pair gets a fixed-window
+  // attempt budget before another expensive PBKDF2 check is allowed.
   if (path === '/api/unlock' && method === 'POST') {
     assertSameOrigin(request)
-    const b = (await request.json()) as Record<string, unknown>
+    const b = await readJsonObject(request, 4 * 1024)
     const folderId = assertFolderId(b.folderId)
     const folder = await folders.getById(env, folderId)
     if (!folder || folder.published !== 1) return error(404, 'Folder not found')
     if (!folder.password_hash) return json({ ok: true })
 
-    const password = typeof b.password === 'string' ? b.password : ''
+    const password = typeof b.password === 'string' ? b.password.slice(0, 512) : ''
+    const limitKey = await rateLimitKey(request, 'unlock', folderId)
+    await assertWithinLimit(env, limitKey, UNLOCK_LIMIT)
     if (!(await verifyPassword(password, folder.password_hash))) {
+      await recordFailure(env, limitKey, UNLOCK_LIMIT, UNLOCK_WINDOW_SEC)
       return error(401, 'Incorrect password')
     }
+    await clearFailures(env, limitKey)
     const cookie = await issueGrant(env, folder, readGrants(request), secure)
     return json({ ok: true }, { headers: { 'set-cookie': cookie } })
   }
@@ -504,7 +598,12 @@ export async function handleApi(
 
   // ----------------------------------------------------------------- admin
 
-  if (!path.startsWith('/api/admin/')) return null
+  if (!path.startsWith('/api/admin/')) {
+    if (path.startsWith('/api/') || path.startsWith('/media/') || path.startsWith('/download/')) {
+      return error(404, 'Unknown endpoint')
+    }
+    return null
+  }
   assertSameOrigin(request)
 
   // First-run bootstrap. Permitted only while no administrator exists, and —
@@ -513,42 +612,71 @@ export async function handleApi(
   if (path === '/api/admin/setup') {
     const existing = await env.DB.prepare('SELECT COUNT(*) AS n FROM admins').first<{ n: number }>()
     const isEmpty = (existing?.n ?? 0) === 0
-    if (method === 'GET') return json({ needsSetup: isEmpty, requiresKey: Boolean(env.SETUP_KEY) })
+    const setupAllowed = !secure || Boolean(env.SETUP_KEY)
+    if (method === 'GET') {
+      return json({ needsSetup: isEmpty, requiresKey: Boolean(env.SETUP_KEY), setupAllowed })
+    }
     if (method === 'POST') {
       if (!isEmpty) return error(403, 'An administrator already exists')
+      if (!setupAllowed) {
+        return error(503, 'Administrator setup is disabled until SETUP_KEY is configured')
+      }
+      const limitKey = await rateLimitKey(request, 'setup')
+      await assertWithinLimit(env, limitKey, LOGIN_LIMIT)
       if (env.SETUP_KEY) {
         const provided = request.headers.get('x-setup-key') ?? ''
         const enc = new TextEncoder()
         const a = await crypto.subtle.digest('SHA-256', enc.encode(provided))
         const b = await crypto.subtle.digest('SHA-256', enc.encode(env.SETUP_KEY))
         if (!new Uint8Array(a).every((v, i) => v === new Uint8Array(b)[i])) {
+          await recordFailure(env, limitKey, LOGIN_LIMIT, LOGIN_WINDOW_SEC)
           return error(403, 'Invalid setup key')
         }
       }
-      const body = (await request.json()) as { username?: string; password?: string }
+      const body = await readJsonObject(request, 4 * 1024)
       const username = str(body.username, 64).trim()
       const password = typeof body.password === 'string' ? body.password : ''
       if (username.length < 3) return error(400, 'Username must be at least 3 characters')
       if (password.length < 10) return error(400, 'Password must be at least 10 characters')
+      if (password.length > 512) return error(400, 'Password is too long')
       const now = Math.floor(Date.now() / 1000)
-      await env.DB.prepare('INSERT INTO admins (username, password_hash, created_at) VALUES (?, ?, ?)')
-        .bind(username, await hashPassword(password), now)
-        .run()
+      const created = await env.DB.prepare(
+        `INSERT INTO admins (username, password_hash, created_at)
+         SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM admins)`,
+      ).bind(username, await hashPassword(password), now).run()
+      if ((created.meta.changes ?? 0) !== 1) {
+        return error(409, 'An administrator was created by another request')
+      }
+      await clearFailures(env, limitKey)
       return json({ ok: true })
     }
   }
 
   if (path === '/api/admin/login' && method === 'POST') {
-    const body = (await request.json()) as { username?: string; password?: string }
+    const body = await readJsonObject(request, 4 * 1024)
     const username = str(body.username, 64).trim()
-    const password = typeof body.password === 'string' ? body.password : ''
+    const password = typeof body.password === 'string' ? body.password.slice(0, 512) : ''
+    const limitKey = await rateLimitKey(request, 'login', username)
+    const globalLimitKey = await rateLimitKey(request, 'login-global')
+    await assertWithinLimit(env, limitKey, LOGIN_LIMIT)
+    await assertWithinLimit(env, globalLimitKey, LOGIN_GLOBAL_LIMIT)
     const admin = await env.DB.prepare('SELECT id, password_hash FROM admins WHERE username = ?')
       .bind(username)
       .first<{ id: number; password_hash: string }>()
 
     const ok = await verifyPassword(password, admin?.password_hash ?? DUMMY_HASH)
-    if (!admin || !ok) return error(401, 'Incorrect username or password')
+    if (!admin || !ok) {
+      await Promise.all([
+        recordFailure(env, limitKey, LOGIN_LIMIT, LOGIN_WINDOW_SEC),
+        recordFailure(env, globalLimitKey, LOGIN_GLOBAL_LIMIT, LOGIN_WINDOW_SEC),
+      ])
+      return error(401, 'Incorrect username or password')
+    }
 
+    await Promise.all([
+      clearFailures(env, limitKey),
+      clearFailures(env, globalLimitKey),
+    ])
     const cookie = await createSession(env, admin.id, secure)
     return json({ ok: true, username }, { headers: { 'set-cookie': cookie } })
   }
@@ -573,7 +701,7 @@ export async function handleApi(
   // --------------------------------------------------------------- folders
 
   if (path === '/api/admin/folders' && method === 'POST') {
-    const b = (await request.json()) as Record<string, unknown>
+    const b = await readJsonObject(request)
     const parentId = assertFolderId(b.parentId)
     if (parentId !== ROOT && !(await folders.getById(env, parentId))) {
       return error(404, 'Parent folder not found')
@@ -583,13 +711,14 @@ export async function handleApi(
       return error(409, 'A folder with that name already exists here')
     }
     const id = crypto.randomUUID()
-    await folders.insert(env, {
+    const inserted = await folders.insert(env, {
       id,
       parentId,
       name,
       note: str(b.note, 2000),
       date: isoDateOrNull(b.date),
     })
+    if (!inserted) return error(409, 'A folder with that name already exists here')
     if (b.password !== undefined && b.password !== null && b.password !== '') {
       await folders.update(env, id, { passwordHash: await hashPassword(sharePassword(b.password)) })
       await rotateSigningKey(env)
@@ -605,7 +734,7 @@ export async function handleApi(
     const current = await folders.getById(env, id)
     if (!current) return error(404, 'Folder not found')
 
-    const b = (await request.json()) as Record<string, unknown>
+    const b = await readJsonObject(request)
     const patch: folders.FolderPatch = {}
 
     if (b.parentId !== undefined) {
@@ -616,8 +745,8 @@ export async function handleApi(
     if (b.name !== undefined) patch.name = folderName(b.name)
     if (b.note !== undefined) patch.note = str(b.note, 2000)
     if (b.date !== undefined) patch.date = isoDateOrNull(b.date)
-    if (b.published !== undefined) patch.published = Boolean(b.published)
-    if (b.sortOrder !== undefined) patch.sortOrder = Number(b.sortOrder) || 0
+    if (b.published !== undefined) patch.published = booleanValue(b.published, 'published value')
+    if (b.sortOrder !== undefined) patch.sortOrder = finiteInteger(b.sortOrder, 'sort order')
     // null clears the lock; a string sets a new one. Either way every grant
     // already handed out for this folder stops verifying, because the grant is
     // signed over the hash that is about to change.
@@ -639,7 +768,11 @@ export async function handleApi(
     await folders.update(env, id, patch)
     // A lock that changes has to take the image links issued under the old one
     // with it.
-    if (patch.passwordHash !== undefined) await rotateSigningKey(env)
+    if (
+      patch.passwordHash !== undefined
+      || patch.parentId !== undefined
+      || patch.published !== undefined
+    ) await rotateSigningKey(env)
     const row = await folders.getById(env, id)
     return json({ ok: true, folder: row ? toPublicFolder(row, true) : null })
   }
@@ -656,11 +789,13 @@ export async function handleApi(
     const doomed = await photos.listInFolders(env, ids)
 
     for (const row of doomed) {
-      const listed = await env.MEDIA.list({ prefix: `originals/${row.id}/`, limit: 10 })
-      const edited = await env.MEDIA.list({ prefix: `edited/${row.id}/`, limit: 1000 })
+      const [listed, edited] = await Promise.all([
+        listObjectKeys(env, `originals/${row.id}/`),
+        listObjectKeys(env, `edited/${row.id}/`),
+      ])
       await deleteObjects(env, [
-        ...listed.objects.map((o) => o.key),
-        ...edited.objects.map((o) => o.key),
+        ...listed,
+        ...edited,
         row.original_key,
         keys.preview(row.id),
         keys.thumb(row.id),
@@ -688,14 +823,20 @@ export async function handleApi(
     if (!(await photos.getById(env, id))) return error(404, 'Photo not found')
     if (!request.body) return error(400, 'Empty body')
 
-    const declared = Number(request.headers.get('content-length') ?? '0')
+    const declared = declaredLength(request)
     const max = Number(env.MAX_UPLOAD_BYTES || '104857600')
-    if (declared > max) return error(413, `File exceeds the ${Math.round(max / 1048576)} MB limit`)
+    const partMax = kind === 'full' ? max : Math.min(max, DERIVATIVE_MAX_BYTES)
+    if (declared !== null && declared > partMax) {
+      return error(413, `File exceeds the ${Math.round(partMax / 1048576)} MB limit`)
+    }
     const type = (request.headers.get('content-type') ?? '').split(';')[0]?.trim().toLowerCase() ?? ''
     if (!SAFE_IMAGE_RE.test(type)) return error(415, 'Edited files must be JPEG, PNG, WebP, or AVIF')
     const buf = await request.arrayBuffer()
     if (!buf.byteLength) return error(400, 'Empty body')
-    if (buf.byteLength > max) return error(413, `File exceeds the ${Math.round(max / 1048576)} MB limit`)
+    if (buf.byteLength > partMax) {
+      return error(413, `File exceeds the ${Math.round(partMax / 1048576)} MB limit`)
+    }
+    if (!imageBytesMatch(buf, type)) return error(415, 'The file bytes do not match its image type')
     const key = kind === 'full'
       ? keys.edited(id, revision)
       : kind === 'preview'
@@ -705,12 +846,26 @@ export async function handleApi(
     return json({ ok: true, key })
   }
 
+  const stagedEdit = /^\/api\/admin\/photos\/([0-9a-f-]+)\/edited\/([A-Za-z0-9_-]+)$/i.exec(path)
+  if (stagedEdit && method === 'DELETE') {
+    const id = assertId(stagedEdit[1])
+    const revision = assertRevision(stagedEdit[2])
+    const current = await photos.getById(env, id)
+    if (!current) return error(404, 'Photo not found')
+    const prefix = `edited/${id}/${revision}/`
+    if (current.edited_key?.startsWith(prefix)) {
+      return error(409, 'The published edited version cannot be removed as staging data')
+    }
+    await deleteObjects(env, await listObjectKeys(env, prefix))
+    return json({ ok: true })
+  }
+
   const editedPhoto = /^\/api\/admin\/photos\/([0-9a-f-]+)\/edited$/i.exec(path)
   if (editedPhoto && method === 'POST') {
     const id = assertId(editedPhoto[1])
     const current = await photos.getById(env, id)
     if (!current) return error(404, 'Photo not found')
-    const body = (await request.json()) as Record<string, unknown>
+    const body = await readJsonObject(request)
     const revision = assertRevision(body.revision)
     const fullKey = keys.edited(id, revision)
     const previewKey = keys.editedPreview(id, revision)
@@ -723,6 +878,13 @@ export async function handleApi(
     if (!full || !preview || !thumb) return error(409, 'The edited image is not fully uploaded yet')
     const type = (full.httpMetadata?.contentType ?? '').toLowerCase()
     if (!SAFE_IMAGE_RE.test(type)) return error(415, 'The edited image has an unsupported type')
+    for (const part of [preview, thumb]) {
+      const partType = (part.httpMetadata?.contentType ?? '').toLowerCase()
+      if (!SAFE_IMAGE_RE.test(partType) || part.size < 1 || part.size > DERIVATIVE_MAX_BYTES) {
+        return error(415, 'An edited preview has invalid metadata')
+      }
+    }
+    if (full.size < 1) return error(409, 'The edited image is empty')
 
     const filename = safeFilename(str(body.filename, 200) || `edited-${id}.jpg`)
     const updated = await photos.setEdited(env, id, {
@@ -739,11 +901,11 @@ export async function handleApi(
 
     // Delete the previous immutable version only after the row points at the
     // complete replacement. Readers therefore see either whole version.
-    await deleteObjects(env, [
+    ctx.waitUntil(deleteObjects(env, [
       current.edited_key !== fullKey ? current.edited_key : null,
       current.edited_preview_key !== previewKey ? current.edited_preview_key : null,
       current.edited_thumb_key !== thumbKey ? current.edited_thumb_key : null,
-    ])
+    ]).catch((error) => console.error('Could not remove the previous edited version:', error)))
     const row = await photos.getById(env, id)
     const [photo] = await publicPhotos(env, row ? [row] : [], true)
     return json({ ok: true, photo })
@@ -754,9 +916,9 @@ export async function handleApi(
     const current = await photos.getById(env, id)
     if (!current) return error(404, 'Photo not found')
     await photos.clearEdited(env, id)
-    const listed = await env.MEDIA.list({ prefix: `edited/${id}/`, limit: 1000 })
+    const listed = await listObjectKeys(env, `edited/${id}/`)
     await deleteObjects(env, [
-      ...listed.objects.map((object) => object.key),
+      ...listed,
       current.edited_key,
       current.edited_preview_key,
       current.edited_thumb_key,
@@ -770,14 +932,20 @@ export async function handleApi(
     const id = assertId(part[1])
     const kind = part[2] as 'original' | 'preview' | 'thumb'
     if (!request.body) return error(400, 'Empty body')
+    if (await photos.getById(env, id)) {
+      return error(409, 'An existing photo cannot be overwritten through the upload staging route')
+    }
 
-    const declared = Number(request.headers.get('content-length') ?? '0')
     const max = Number(env.MAX_UPLOAD_BYTES || '104857600')
-    if (declared > max) return error(413, `File exceeds the ${Math.round(max / 1048576)} MB limit`)
 
     if (kind === 'original') {
+      const declared = declaredLength(request, true) as number
+      if (declared < 1) return error(400, 'Empty body')
+      if (declared > max) return error(413, `File exceeds the ${Math.round(max / 1048576)} MB limit`)
       const filename = safeFilename(decodeFilenameHeader(request.headers.get('x-filename') ?? 'photo'))
-      const type = request.headers.get('content-type') || 'application/octet-stream'
+      const type = (request.headers.get('content-type') || 'application/octet-stream')
+        .split(';')[0]!.trim().toLowerCase().slice(0, 120)
+      await deleteObjects(env, await listObjectKeys(env, `originals/${id}/`))
       const key = await putOriginal(env, id, filename, request.body, type)
       return json({ ok: true, key, filename })
     }
@@ -787,6 +955,12 @@ export async function handleApi(
     const sent = (request.headers.get('content-type') ?? '').split(';')[0]?.trim().toLowerCase()
     const type = sent && /^image\/(webp|jpeg|png|avif)$/.test(sent) ? sent : 'image/webp'
     const buf = await request.arrayBuffer()
+    if (!buf.byteLength) return error(400, 'Empty body')
+    const derivativeMax = Math.min(max, DERIVATIVE_MAX_BYTES)
+    if (buf.byteLength > derivativeMax) {
+      return error(413, `File exceeds the ${Math.round(derivativeMax / 1048576)} MB limit`)
+    }
+    if (!imageBytesMatch(buf, type)) return error(415, 'The file bytes do not match its image type')
     await putDerivative(env, kind === 'preview' ? keys.preview(id) : keys.thumb(id), buf, type)
     return json({ ok: true })
   }
@@ -800,7 +974,7 @@ export async function handleApi(
     const id = assertId(single[1])
     if (await photos.getById(env, id)) return error(409, 'Photo already exists')
 
-    const b = (await request.json()) as Record<string, unknown>
+    const b = await readJsonObject(request)
     const folderId = assertFolderId(b.folderId)
     if (folderId !== ROOT && !(await folders.getById(env, folderId))) {
       return error(404, 'Destination folder not found')
@@ -814,6 +988,22 @@ export async function handleApi(
     const original = listed.objects[0]
     if (!original) return error(409, 'The original file has not been uploaded yet')
 
+    const hasPreview = b.hasPreview === true
+    const hasThumb = b.hasThumb === true
+    const [preview, thumb] = await Promise.all([
+      hasPreview ? env.MEDIA.head(keys.preview(id)) : null,
+      hasThumb ? env.MEDIA.head(keys.thumb(id)) : null,
+    ])
+    if (hasPreview && !preview) return error(409, 'The preview has not been uploaded yet')
+    if (hasThumb && !thumb) return error(409, 'The thumbnail has not been uploaded yet')
+    for (const derivative of [preview, thumb]) {
+      if (!derivative) continue
+      const type = (derivative.httpMetadata?.contentType ?? '').toLowerCase()
+      if (!SAFE_IMAGE_RE.test(type) || derivative.size < 1 || derivative.size > DERIVATIVE_MAX_BYTES) {
+        return error(415, 'A gallery preview has invalid metadata')
+      }
+    }
+
     await photos.insert(env, {
       id,
       folderId,
@@ -826,10 +1016,10 @@ export async function handleApi(
       originalType:
         original.httpMetadata?.contentType || str(b.type, 120) || 'application/octet-stream',
       originalSize: original.size,
-      previewKey: b.hasPreview ? keys.preview(id) : null,
-      thumbKey: b.hasThumb ? keys.thumb(id) : null,
-      width: Number.isFinite(Number(b.width)) ? Number(b.width) : null,
-      height: Number.isFinite(Number(b.height)) ? Number(b.height) : null,
+      previewKey: hasPreview ? keys.preview(id) : null,
+      thumbKey: hasThumb ? keys.thumb(id) : null,
+      width: optionalDimension(b.width, 'width'),
+      height: optionalDimension(b.height, 'height'),
       placeholder: str(b.placeholder, 4000) || null,
     })
     return json({ ok: true, id }, { status: 201 })
@@ -837,7 +1027,7 @@ export async function handleApi(
 
   if (single && method === 'PATCH') {
     const id = assertId(single[1])
-    const b = (await request.json()) as Record<string, unknown>
+    const b = await readJsonObject(request)
     const patch: photos.PhotoPatch = {}
     if (b.folderId !== undefined) {
       const folderId = assertFolderId(b.folderId)
@@ -850,11 +1040,13 @@ export async function handleApi(
     if (b.description !== undefined) patch.description = str(b.description, 4000)
     if (b.date !== undefined) patch.takenOn = isoDateOrNull(b.date)
     if (b.location !== undefined) patch.location = str(b.location, 120)
-    if (b.published !== undefined) patch.published = Boolean(b.published)
-    if (b.sortOrder !== undefined) patch.sortOrder = Number(b.sortOrder) || 0
+    if (b.published !== undefined) patch.published = booleanValue(b.published, 'published value')
+    if (b.sortOrder !== undefined) patch.sortOrder = finiteInteger(b.sortOrder, 'sort order')
 
+    if (!Object.keys(patch).length) return error(400, 'No changes were supplied')
     const ok = await photos.update(env, id, patch)
     if (!ok) return error(404, 'Photo not found')
+    if (patch.folderId !== undefined || patch.published !== undefined) await rotateSigningKey(env)
     const row = await photos.getById(env, id)
     const [updated] = await publicPhotos(env, row ? [row] : [], true)
     return json({ ok: true, photo: updated ?? null })
@@ -865,11 +1057,13 @@ export async function handleApi(
     const row = await photos.getById(env, id)
     // List rather than trust the row: this also purges the orphaned objects of
     // an upload that failed before its metadata was committed.
-    const listed = await env.MEDIA.list({ prefix: `originals/${id}/`, limit: 10 })
-    const edited = await env.MEDIA.list({ prefix: `edited/${id}/`, limit: 1000 })
+    const [listed, edited] = await Promise.all([
+      listObjectKeys(env, `originals/${id}/`),
+      listObjectKeys(env, `edited/${id}/`),
+    ])
     await deleteObjects(env, [
-      ...listed.objects.map((o) => o.key),
-      ...edited.objects.map((o) => o.key),
+      ...listed,
+      ...edited,
       row?.original_key ?? null,
       keys.preview(id),
       keys.thumb(id),
@@ -885,7 +1079,7 @@ export async function handleApi(
 }
 
 export function toErrorResponse(err: unknown): Response {
-  if (err instanceof HttpError) return error(err.status, err.message)
+  if (err instanceof HttpError) return error(err.status, err.message, err.headers)
   console.error('Unhandled error:', err)
   return error(500, 'Internal error')
 }

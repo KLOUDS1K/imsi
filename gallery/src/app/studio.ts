@@ -3,6 +3,7 @@ import { activeStudioImport, requestStudioSignIn, takePendingStudioImport } from
 import { api } from './api'
 import type { AppContext } from '../../../src/app/context'
 import type { ExportSettings } from '../../../src/editor/types'
+import { applyTheme } from './state'
 
 const resize = (edge?: number): ExportSettings['resize'] => edge
   ? { mode: 'long-edge', value: edge, width: edge, height: edge, dontEnlarge: true }
@@ -44,12 +45,14 @@ async function publishEdit(ctx: AppContext, photoId: string, originalName: strin
   })
 
   ctx.busy.set({ active: true, label: 'Saving edited version…', progress: 0 })
+  let revision: string | null = null
+  let committed = false
   try {
     const full = await make()
     ctx.busy.set({ active: true, label: 'Preparing gallery previews…', progress: 0.35 })
     const preview = await make(2400, 88)
     const thumb = await make(800, 84)
-    const revision = crypto.randomUUID().replace(/-/g, '')
+    revision = crypto.randomUUID().replace(/-/g, '')
     ctx.busy.set({ active: true, label: 'Uploading edited version…', progress: 0.7 })
     await Promise.all([
       api.photos.uploadEdited(photoId, revision, 'full', full.blob),
@@ -62,7 +65,13 @@ async function publishEdit(ctx: AppContext, photoId: string, originalName: strin
       width: full.width,
       height: full.height,
     })
+    committed = true
     ctx.toast('Edited version saved to the gallery.', 'success')
+  } catch (error) {
+    if (revision && !committed) {
+      await api.photos.discardEditedUpload(photoId, revision).catch(() => undefined)
+    }
+    throw error
   } finally {
     ctx.busy.set({ active: false })
   }
@@ -88,6 +97,7 @@ export async function bootStudio(): Promise<void> {
     requestStudioSignIn()
     return
   }
+  applyTheme()
   document.title = 'KLOUD Studio'
   document.documentElement.classList.remove('is-viewing', 'is-drawer-open')
   document.body.className = 'studio-page'

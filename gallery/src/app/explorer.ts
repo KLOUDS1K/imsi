@@ -479,6 +479,13 @@ function listRows(folders: FolderEntry[], photos: Photo[]): HTMLElement {
   }
 
   for (const photo of photos) {
+    const rowThumb = el('span', { class: 'row__thumb' })
+    const rowImage = el('img', { src: photo.thumbUrl, alt: '', loading: 'lazy', decoding: 'async' })
+    rowImage.addEventListener('error', () => {
+      rowThumb.classList.add('row__thumb--fallback')
+      rowThumb.replaceChildren(el('span', { html: icon('image'), 'aria-hidden': 'true' }))
+    }, { once: true })
+    rowThumb.append(rowImage)
     const row = el(
       'a',
       {
@@ -490,9 +497,7 @@ function listRows(folders: FolderEntry[], photos: Photo[]): HTMLElement {
       },
       [
         el('span', { class: 'list__cell list__cell--name' }, [
-          el('span', { class: 'row__thumb' }, [
-            el('img', { src: photo.thumbUrl, alt: '', loading: 'lazy', decoding: 'async' }),
-          ]),
+          rowThumb,
           el('span', { class: 'row__name', text: displayName(photo) }),
         ]),
         el('span', { class: 'list__cell', text: formatBytes(photo.size) }),

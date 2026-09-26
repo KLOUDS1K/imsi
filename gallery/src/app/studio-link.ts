@@ -61,16 +61,29 @@ export function activeStudioImport(): PendingStudioImport | null {
 }
 
 export function requestStudioSignIn(): void {
-  try { sessionStorage.setItem(STUDIO_LOGIN_RETURN_KEY, '1') } catch { /* continue */ }
+  rememberStudioLoginReturn(`${window.location.pathname}${window.location.search}`)
   window.location.assign('/admin')
 }
 
-export function takeStudioLoginReturn(): boolean {
+export function rememberStudioLoginReturn(path: string): void {
   try {
-    const requested = sessionStorage.getItem(STUDIO_LOGIN_RETURN_KEY) === '1'
-    sessionStorage.removeItem(STUDIO_LOGIN_RETURN_KEY)
-    return requested
+    const url = new URL(path, window.location.origin)
+    if (url.origin !== window.location.origin || url.pathname.replace(/\/+$/, '') !== '/studio') return
+    sessionStorage.setItem(STUDIO_LOGIN_RETURN_KEY, `${url.pathname}${url.search}`)
   } catch {
-    return false
+    /* storage can be disabled */
+  }
+}
+
+export function takeStudioLoginReturn(): string | null {
+  try {
+    const requested = sessionStorage.getItem(STUDIO_LOGIN_RETURN_KEY)
+    sessionStorage.removeItem(STUDIO_LOGIN_RETURN_KEY)
+    if (!requested) return null
+    const url = new URL(requested, window.location.origin)
+    if (url.origin !== window.location.origin || url.pathname.replace(/\/+$/, '') !== '/studio') return null
+    return `${url.pathname}${url.search}`
+  } catch {
+    return null
   }
 }

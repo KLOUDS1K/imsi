@@ -24,6 +24,7 @@ let requestToken = 0
 const cache = new Map<string, BrowseResult>()
 const inflight = new Map<string, Promise<BrowseResult>>()
 const CACHE_LIMIT = 40
+let cacheEpoch = 0
 
 function remember(folderId: string, result: BrowseResult): void {
   cache.set(folderId, result)
@@ -36,13 +37,18 @@ function remember(folderId: string, result: BrowseResult): void {
 function request(folderId: string): Promise<BrowseResult> {
   const existing = inflight.get(folderId)
   if (existing) return existing
+  const epoch = cacheEpoch
   const pending = api
     .browse(folderId)
     .then((result) => {
-      remember(folderId, result)
+      // A mutation/logout can invalidate an in-flight prefetch. Let its caller
+      // finish, but never put that stale answer back into the fresh cache.
+      if (epoch === cacheEpoch) remember(folderId, result)
       return result
     })
-    .finally(() => inflight.delete(folderId))
+    .finally(() => {
+      if (inflight.get(folderId) === pending) inflight.delete(folderId)
+    })
   inflight.set(folderId, pending)
   return pending
 }
@@ -156,6 +162,7 @@ export async function runSearch(query: string): Promise<void> {
  * screen, and a stale hit would quietly show the old answer.
  */
 export async function reload(): Promise<void> {
+  cacheEpoch += 1
   cache.clear()
   inflight.clear()
   await Promise.all([loadTree(), loadFolder(state.folderId)])

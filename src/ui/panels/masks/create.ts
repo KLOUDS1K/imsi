@@ -76,7 +76,7 @@ export function newComponent(id: string, choice: MaskChoice, mode: MaskMode): Ma
   const base = { id, mode, invert: false };
   switch (choice.kind) {
     case 'ai':
-      return { ...base, kind: 'ai', ai: { target: choice.target } };
+      return { ...base, kind: 'ai', ai: { target: choice.target, edgeShift: 0, feather: 0 } };
     case 'brush':
       return { ...base, kind: 'brush', brush: { strokes: [] } };
     case 'linear':

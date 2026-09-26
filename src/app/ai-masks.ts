@@ -25,6 +25,7 @@ import type { PersistentAiMaskStore } from './services';
 import type { BusyTracker } from './busy';
 
 export const depthKey = (photoId: string): string => `depth:${photoId}`;
+export const AI_MASK_CACHE_VERSION = 'v2';
 
 /** FNV-1a 32-bit → base36 (stable short hash for cache keys). */
 export function hashString(s: string): string {
@@ -39,13 +40,15 @@ export function hashString(s: string): string {
 export function aiBitmapKey(photoId: string, ai: Pick<AiMaskParams, 'target' | 'point' | 'box'>): string {
   const r = (v: number): string => v.toFixed(4);
   const geo = ai.point ? `p${r(ai.point.x)},${r(ai.point.y)}` : ai.box ? `b${r(ai.box.x)},${r(ai.box.y)},${r(ai.box.w)},${r(ai.box.h)}` : '';
-  return `ai:${photoId}:${ai.target}:${hashString(geo)}`;
+  return `ai:${AI_MASK_CACHE_VERSION}:${photoId}:${ai.target}:${hashString(geo)}`;
 }
+
+export const isCurrentAiBitmapKey = (key: string | undefined): key is string => !!key && key.startsWith(`ai:${AI_MASK_CACHE_VERSION}:`);
 
 /** Every AI bitmap key referenced by the params (for restore on open). */
 export function aiKeysOf(params: EditParams): string[] {
   const keys: string[] = [];
-  for (const m of params.masks) for (const c of m.components) if (c.ai?.bitmapKey) keys.push(c.ai.bitmapKey);
+  for (const m of params.masks) for (const c of m.components) if (isCurrentAiBitmapKey(c.ai?.bitmapKey)) keys.push(c.ai.bitmapKey);
   return keys;
 }
 
@@ -126,13 +129,17 @@ export function createAiMaskCoordinator(deps: AiMaskCoordinatorDeps): AiMaskCoor
       const found = findComponent(doc.store.params, componentId);
       if (!found || !found.comp.ai) return;
       const ai = found.comp.ai;
-      const key = ai.bitmapKey || aiBitmapKey(doc.photoId, { target, point: ai.point, box: ai.box });
-      if (!ai.bitmapKey) {
+      const currentKey = isCurrentAiBitmapKey(ai.bitmapKey);
+      const key: string = currentKey ? ai.bitmapKey! : aiBitmapKey(doc.photoId, { target, point: ai.point, box: ai.box });
+      if (!currentKey) {
+        // A missing key means an explicit Refresh; an old key means the mask
+        // was made by the previous detector. Either case must be allowed to retry.
+        failed.delete(key);
         // Deferred: requestAi is called from inside a render; never mutate the store re-entrantly.
         setTimeout(() => {
           if (ctx.doc.value !== doc) return;
           const again = findComponent(doc.store.params, componentId);
-          if (again?.comp.ai && !again.comp.ai.bitmapKey) doc.store.set(`masks.${again.mi}.components.${again.ci}.ai.bitmapKey`, key, { transient: true });
+          if (again?.comp.ai && !isCurrentAiBitmapKey(again.comp.ai.bitmapKey)) doc.store.set(`masks.${again.mi}.components.${again.ci}.ai.bitmapKey`, key, { transient: true });
         }, 0);
       }
       if (store.get(key) || inflight.has(key) || failed.has(key)) return;

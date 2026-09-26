@@ -21,8 +21,10 @@ export function skyLikelihood(img: Img, texture: Float32Array): Float32Array {
   const P = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const l = L[i]!, c = C[i]!, t = texture[i]!;
-    const blue = smoothstep(-0.004, -0.045, B[i]!) * smoothstep(0.4, 0.6, l) * (1 - smoothstep(0.02, 0.08, A[i]!));
-    const overcast = (1 - smoothstep(0.03, 0.08, c)) * smoothstep(0.55, 0.78, l);
+    // Keep saturated twilight blue and dim overcast skies eligible; the old
+    // lightness gates discarded both before connectivity could inspect them.
+    const blue = smoothstep(-0.002, -0.045, B[i]!) * smoothstep(0.28, 0.57, l) * (1 - smoothstep(0.025, 0.09, A[i]!));
+    const overcast = (1 - smoothstep(0.035, 0.09, c)) * smoothstep(0.48, 0.76, l);
     const warm = 0.55 * smoothstep(0.55, 0.75, l) * smoothstep(0.0, 0.03, A[i]! + B[i]!);
     const smooth = 1 - smoothstep(0.012, 0.05, t);
     const cloud = smoothstep(0.66, 0.85, l) * (1 - smoothstep(0.04, 0.09, c)) * (1 - smoothstep(0.05, 0.12, t));
@@ -39,11 +41,16 @@ export function skyCoarse(img: Img): Float32Array {
   const queue = new Int32Array(n);
   let qh = 0, qt = 0;
   let sL = 0, sA = 0, sB = 0, cnt = 0;
-  const seedRows = Math.max(1, Math.round(h * 0.02));
+  // Seed the very top permissively, then accept only high-confidence pockets
+  // slightly lower down. This recovers sky behind thin branches and letterbox
+  // crops without turning a smooth wall into sky as readily.
+  const topRows = Math.max(1, Math.round(h * 0.025));
+  const seedRows = Math.max(topRows, Math.round(h * 0.08));
   for (let y = 0; y < seedRows; y++)
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
-      if (P[i]! > 0.35) {
+      const threshold = y < topRows ? 0.27 : 0.52;
+      if (P[i]! > threshold && texture[i]! < (y < topRows ? 0.11 : 0.065)) {
         sky[i] = 1;
         queue[qt++] = i;
         sL += L[i]!;
@@ -52,12 +59,12 @@ export function skyCoarse(img: Img): Float32Array {
         cnt++;
       }
     }
-  if (cnt < Math.max(3, w * seedRows * 0.05)) return new Float32Array(n);
+  if (cnt < Math.max(3, w * topRows * 0.035)) return new Float32Array(n);
 
   const STEP = 0.055; // max OKLab step between neighbours
   const MODEL = 0.32; // max OKLab distance to the running sky mean
   const tryAdd = (from: number, to: number) => {
-    if (sky[to] || P[to]! < 0.2 || texture[to]! > 0.09) return;
+    if (sky[to] || P[to]! < 0.16 || texture[to]! > 0.11) return;
     const dl = L[to]! - L[from]!, da = A[to]! - A[from]!, db = B[to]! - B[from]!;
     if (dl * dl + da * da + db * db > STEP * STEP) return;
     const ml = L[to]! - sL / cnt, ma = A[to]! - sA / cnt, mb = B[to]! - sB / cnt;

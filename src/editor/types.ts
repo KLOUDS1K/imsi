@@ -481,6 +481,10 @@ export interface DepthRangeParams {
 
 export interface AiMaskParams {
   target: AiMaskTarget;
+  /** Expand (+) or contract (-) the detected boundary, -100..100. */
+  edgeShift?: number;
+  /** Additional edge softness, 0..100. */
+  feather?: number;
   /** For target 'object': a click point or a box, source-normalized. */
   point?: Point;
   box?: Rect;

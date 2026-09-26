@@ -62,6 +62,9 @@ test.describe.serial('KLOUD Studio', () => {
       if (m.type() === 'error' && !IGNORED_CONSOLE.test(m.text())) errors.push(`console: ${m.text()}`);
     });
     await page.route('**/api/admin/session', (route) => route.fulfill({ json: { authenticated: true, username: 'test' } }));
+    // Keep CI deterministic/offline: production tries MediaPipe first, while
+    // this route deliberately exercises the enhanced local fallback.
+    await page.route('https://storage.googleapis.com/**', (route) => route.abort());
     await page.goto('/studio');
     await page.waitForFunction(() => !!(window as unknown as { __kloud?: K }).__kloud);
   });
@@ -243,6 +246,11 @@ test.describe.serial('KLOUD Studio', () => {
         { timeout: 30_000 },
       )
       .toBe(true);
+    await expect(page.getByText('Edge Shift', { exact: true })).toBeVisible();
+    await expect(page.getByText('Feather', { exact: true }).last()).toBeVisible();
+    await page.getByRole('button', { name: 'Add Paint' }).click();
+    await expect.poll(() => k(page, (rt) => rt.ctx.doc.value.store.params.masks.at(-1)?.components.at(-1)?.kind)).toBe('brush');
+    expect(await k(page, (rt) => rt.ctx.brush.value.autoMask)).toBe(true);
     await k(page, (rt) => rt.ctx.doc.value.store.update('clear masks', (p: K) => void (p.masks = [])));
   });
 

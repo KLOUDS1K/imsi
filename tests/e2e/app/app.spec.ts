@@ -452,7 +452,7 @@ test.describe.serial('KLOUD Studio', () => {
     await adjust.click();
     await expect(page.locator('.k-app')).toHaveClass(/is-right-open/);
     await expect(page.getByRole('complementary', { name: 'Develop panel' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Light' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Light', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Color', exact: true }).click();
     await expect(page.getByText('Color Mixer', { exact: true })).toBeVisible();
 

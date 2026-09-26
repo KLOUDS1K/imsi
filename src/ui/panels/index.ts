@@ -4,7 +4,7 @@
  */
 import './panels.css';
 import type { AppContext, DevelopTool } from '../../app/context';
-import { clear, Disposer, h } from '../dom';
+import { clear, Disposer, h, on } from '../dom';
 import { createIconButton, type IconName } from '../kit';
 import { createAiPanel } from './ai';
 import { DocBinder } from './binding';
@@ -32,18 +32,37 @@ const TOOLS: { id: DevelopTool; icon: IconName; label: string; key: string }[] =
 
 function createEditPanel(ctx: AppContext, b: DocBinder): ToolPanel {
   const d = new Disposer();
-  const sections = [
-    createBasicSection(ctx, b, d),
-    createToneCurveSection(ctx, b, d),
-    createColorMixerSection(ctx, b, d),
-    createColorGradingSection(ctx, b, d),
-    createDetailSection(ctx, b, d),
-    createOpticsSection(ctx, b, d),
-    createGeometrySection(ctx, b, d),
-    createEffectsSection(ctx, b, d),
-    createCalibrationSection(ctx, b, d),
+  const groups = [
+    { label: 'Light', section: createBasicSection(ctx, b, d) },
+    { label: 'Curve', section: createToneCurveSection(ctx, b, d) },
+    { label: 'Color', section: createColorMixerSection(ctx, b, d) },
+    { label: 'Grade', section: createColorGradingSection(ctx, b, d) },
+    { label: 'Detail', section: createDetailSection(ctx, b, d) },
+    { label: 'Optics', section: createOpticsSection(ctx, b, d) },
+    { label: 'Geometry', section: createGeometrySection(ctx, b, d) },
+    { label: 'Effects', section: createEffectsSection(ctx, b, d) },
+    { label: 'Calibrate', section: createCalibrationSection(ctx, b, d) },
   ];
-  const el = h('div', { class: 'k-pnl-edit' }, ...sections.map((s) => s.el));
+  const sections = groups.map((group) => group.section);
+  let active = 0;
+  const navButtons = groups.map((group, index) =>
+    h(
+      'button',
+      {
+        type: 'button',
+        class: ['k-pnl-editnav__button', index === active && 'is-active'],
+        onclick: () => {
+          active = index;
+          navButtons.forEach((button, i) => button.classList.toggle('is-active', i === index));
+          sections.forEach((section, i) => section.setOpen(i === index));
+          requestAnimationFrame(() => group.section.el.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+        },
+      },
+      group.label,
+    ),
+  );
+  const mobileNav = h('nav', { class: 'k-pnl-editnav', attrs: { 'aria-label': 'Adjustment groups' } }, ...navButtons);
+  const el = h('div', { class: 'k-pnl-edit' }, mobileNav, ...sections.map((s) => s.el));
   return {
     el,
     dispose() {
@@ -53,7 +72,12 @@ function createEditPanel(ctx: AppContext, b: DocBinder): ToolPanel {
   };
 }
 
-export function createDevelopRightPanel(ctx: AppContext): { el: HTMLElement; dispose(): void } {
+export interface DevelopRightPanelOptions {
+  /** Phone sheet close action. Ignored by the desktop layout. */
+  onMobileClose?: () => void;
+}
+
+export function createDevelopRightPanel(ctx: AppContext, opts: DevelopRightPanelOptions = {}): { el: HTMLElement; dispose(): void } {
   const d = new Disposer();
   const b = new DocBinder(ctx);
   d.add(() => b.dispose());
@@ -76,13 +100,117 @@ export function createDevelopRightPanel(ctx: AppContext): { el: HTMLElement; dis
   const more = createIconButton({ icon: 'more-horizontal', label: 'Develop actions', onClick: () => openDevelopMenu(ctx, more.el) });
   d.add(() => more.destroy());
   toolBar.append(more.el);
-  const el = h('aside', { class: 'k-pnl k-pnl-right', attrs: { 'aria-label': 'Develop panel' } }, hist.el, toolBar, body);
+
+  /* Phone sheet furniture. It remains hidden and inert in desktop layouts. */
+  const mobileTitle = h('strong', { class: 'k-pnl__mobile-title' }, 'Adjust');
+  const grab = h(
+    'button',
+    { type: 'button', class: 'k-pnl__mobile-grab', attrs: { 'aria-label': 'Resize develop panel', 'aria-expanded': 'false' } },
+    h('span', { class: 'k-pnl__mobile-grabber', attrs: { 'aria-hidden': 'true' } }),
+  );
+  const histToggle = createIconButton({
+    icon: 'bar-chart',
+    label: 'Show histogram',
+    size: 'lg',
+    pressed: false,
+    autoToggle: false,
+    tooltip: false,
+  });
+  const expand = createIconButton({ icon: 'chevron-up', label: 'Expand panel', size: 'lg', tooltip: false });
+  const close = createIconButton({ icon: 'x', label: 'Close panel', size: 'lg', tooltip: false, onClick: () => opts.onMobileClose?.() });
+  d.add(() => [histToggle, expand, close].forEach((item) => item.destroy()));
+  const mobileHead = h(
+    'div',
+    { class: 'k-pnl__mobile-head' },
+    grab,
+    h('div', { class: 'k-pnl__mobile-headrow' }, mobileTitle, h('span', { class: 'k-pnl__mobile-actions' }, histToggle.el, expand.el, close.el)),
+  );
+  const el = h(
+    'aside',
+    { id: 'kloud-mobile-develop-sheet', class: 'k-pnl k-pnl-right', attrs: { 'aria-label': 'Develop panel' }, dataset: { mobileSnap: 'half' } },
+    mobileHead,
+    hist.el,
+    toolBar,
+    body,
+  );
+
+  type Snap = 'compact' | 'half' | 'full';
+  const setSnap = (snap: Snap): void => {
+    el.dataset.mobileSnap = snap;
+    el.style.removeProperty('--k-mobile-sheet-height');
+    const full = snap === 'full';
+    grab.setAttribute('aria-expanded', String(full));
+    expand.setIcon(full ? 'chevron-down' : 'chevron-up');
+    expand.setLabel(full ? 'Reduce panel' : 'Expand panel');
+  };
+  const toggleSnap = (): void => setSnap(el.dataset.mobileSnap === 'full' ? 'half' : 'full');
+  expand.el.addEventListener('click', toggleSnap);
+  d.add(() => expand.el.removeEventListener('click', toggleSnap));
+  histToggle.el.addEventListener('click', () => {
+    const open = !el.classList.contains('is-mobile-hist-open');
+    el.classList.toggle('is-mobile-hist-open', open);
+    histToggle.setPressed(open);
+    histToggle.setLabel(open ? 'Hide histogram' : 'Show histogram');
+  });
+
+  let pointer = -1;
+  let startY = 0;
+  let startHeight = 0;
+  let moved = false;
+  d.add(
+    on(grab, 'pointerdown', (event) => {
+      if (event.button !== 0) return;
+      pointer = event.pointerId;
+      startY = event.clientY;
+      startHeight = el.getBoundingClientRect().height;
+      moved = false;
+      grab.setPointerCapture(pointer);
+      el.classList.add('is-mobile-resizing');
+      event.preventDefault();
+    }),
+  );
+  d.add(
+    on(grab, 'pointermove', (event) => {
+      if (event.pointerId !== pointer) return;
+      const dy = event.clientY - startY;
+      if (Math.abs(dy) > 5) moved = true;
+      const available = el.parentElement?.parentElement?.getBoundingClientRect().height ?? window.innerHeight;
+      const height = Math.max(150, Math.min(available - 8, startHeight - dy));
+      el.style.setProperty('--k-mobile-sheet-height', `${height}px`);
+      el.dataset.mobileSnap = 'custom';
+    }),
+  );
+  const endResize = (event: PointerEvent): void => {
+    if (event.pointerId !== pointer) return;
+    pointer = -1;
+    el.classList.remove('is-mobile-resizing');
+    const available = el.parentElement?.parentElement?.getBoundingClientRect().height ?? window.innerHeight;
+    const ratio = el.getBoundingClientRect().height / Math.max(1, available);
+    if (moved && ratio < 0.26) {
+      opts.onMobileClose?.();
+      setSnap('half');
+    } else if (ratio < 0.5) setSnap('compact');
+    else if (ratio < 0.76) setSnap('half');
+    else setSnap('full');
+  };
+  d.add(on(grab, 'pointerup', endResize));
+  d.add(on(grab, 'pointercancel', endResize));
+  d.add(
+    on(grab, 'click', () => {
+      if (moved) {
+        moved = false;
+        return;
+      }
+      toggleSnap();
+    }),
+  );
 
   let current: ToolPanel | null = null;
   let currentTool: DevelopTool | null = null;
   const show = () => {
     const doc = ctx.doc.value;
     const tool = ctx.tool.value;
+    mobileTitle.textContent = TOOLS.find((item) => item.id === tool)?.label ?? 'Develop';
     for (const { id, btn } of buttons) btn.setPressed(id === tool);
     if (current && currentTool === tool && doc) return;
     current?.dispose();

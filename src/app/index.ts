@@ -22,6 +22,7 @@ import { openShortcutsHelp } from '../ui/shell/help';
 import { createShellState, layoutFor, type ShellState } from '../ui/shell/state';
 import { createAppStatusBar } from '../ui/shell/statusbar';
 import { createAppToolbar } from '../ui/shell/toolbar';
+import { createMobileDevelopDock } from '../ui/shell/mobile-develop';
 
 export type { AppContext, AppModule, ThemeChoice } from './context';
 
@@ -99,8 +100,10 @@ export async function mountKloudEditor(root: HTMLElement, options: MountOptions 
   d.add(() => toolbar.dispose());
   const status = createAppStatusBar(rt);
   d.add(() => status.dispose());
+  const mobileDock = createMobileDevelopDock(ctx, state);
+  d.add(() => mobileDock.dispose());
 
-  const app = h('div', { class: 'k-app' }, toolbar.el, body, status.el);
+  const app = h('div', { class: 'k-app' }, toolbar.el, body, mobileDock.el, status.el);
   loading.remove();
   root.append(app);
   d.add(attachDropzone(rt, app));
@@ -148,7 +151,7 @@ export async function mountKloudEditor(root: HTMLElement, options: MountOptions 
     if (nav) mounted.push(nav);
     if (panels) {
       put(leftBody, panels.createDevelopLeftPanel(ctx, { navigator: nav?.el }));
-      put(right, panels.createDevelopRightPanel(ctx));
+      put(right, panels.createDevelopRightPanel(ctx, { onMobileClose: () => state.mobilePanelOpen.set(false) }));
     } else {
       put(right, createUnavailable('Panels unavailable', rt.features.error('panels') ?? 'The develop panels failed to load.'));
     }
@@ -171,7 +174,9 @@ export async function mountKloudEditor(root: HTMLElement, options: MountOptions 
 
   /* ------------------------------ layout ------------------------------ */
   const applyLayout = () => {
-    const layout = layoutFor(app.clientWidth || window.innerWidth);
+    const width = app.clientWidth || window.innerWidth;
+    const height = app.clientHeight || window.innerHeight;
+    const layout = layoutFor(width, height, window.matchMedia?.('(pointer: coarse)').matches ?? false);
     const small = layout === 'narrow' || layout === 'phone';
     const wasSmall = app.dataset.layout === 'narrow' || app.dataset.layout === 'phone';
     // The sidebar is a drawer on small screens: start closed there.
@@ -187,16 +192,18 @@ export async function mountKloudEditor(root: HTMLElement, options: MountOptions 
   const syncPanels = () => {
     const focus = state.focusMode.value;
     app.classList.toggle('is-left-open', state.leftOpen.value && !focus);
-    app.classList.toggle('is-right-open', state.rightOpen.value && !focus);
+    const rightOpen = state.layout.value === 'phone' ? state.mobilePanelOpen.value : state.rightOpen.value;
+    app.classList.toggle('is-right-open', rightOpen && !focus);
     app.classList.toggle('is-film-open', state.filmstripOpen.value && !focus);
     app.classList.toggle('is-focus', focus);
   };
-  for (const s of [state.leftOpen, state.rightOpen, state.focusMode, state.filmstripOpen]) d.add(s.subscribe(syncPanels));
+  for (const s of [state.leftOpen, state.rightOpen, state.mobilePanelOpen, state.layout, state.focusMode, state.filmstripOpen]) d.add(s.subscribe(syncPanels));
   syncPanels();
   // On narrow screens the sidebar is a drawer: close it after navigating.
   d.add(
     ctx.module.subscribe(() => {
       if (state.layout.value === 'narrow' || state.layout.value === 'phone') state.leftOpen.set(false);
+      if (state.layout.value === 'phone') state.mobilePanelOpen.set(false);
     }),
   );
   d.add(
@@ -205,7 +212,10 @@ export async function mountKloudEditor(root: HTMLElement, options: MountOptions 
       label: 'Toggle side panels',
       keys: ['Tab'],
       group: 'View',
-      run: () => state.rightOpen.set(!state.rightOpen.value),
+      run: () => {
+        const target = state.layout.value === 'phone' ? state.mobilePanelOpen : state.rightOpen;
+        target.set(!target.value);
+      },
     }),
   );
   d.add(

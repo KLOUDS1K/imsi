@@ -18,6 +18,8 @@ export interface LibrarySortState {
 export interface ShellState {
   leftOpen: Signal<boolean>;
   rightOpen: Signal<boolean>;
+  /** Phone-only develop sheet. Kept separate so mobile use never changes the desktop panel preference. */
+  mobilePanelOpen: Signal<boolean>;
   /** Lock button: hide every panel (Shift+Tab). */
   focusMode: Signal<boolean>;
   filmstripOpen: Signal<boolean>;
@@ -39,8 +41,10 @@ const persisted = <T>(key: string, fallback: T, offs: (() => void)[]): Signal<T>
 /* Breakpoints (keep in sync with shell.css). */
 export const BREAKPOINTS = { medium: 1024, narrow: 820, phone: 640 } as const;
 
-export function layoutFor(width: number): LayoutClass {
-  if (width <= BREAKPOINTS.phone) return 'phone';
+export function layoutFor(width: number, height = Number.POSITIVE_INFINITY, coarsePointer = false): LayoutClass {
+  // A phone rotated to landscape is often wider than 640px. Treat short,
+  // touch-first viewports as phones too, without changing desktop windows.
+  if (width <= BREAKPOINTS.phone || (coarsePointer && width <= 920 && height <= 640)) return 'phone';
   if (width <= BREAKPOINTS.narrow) return 'narrow';
   if (width <= BREAKPOINTS.medium) return 'medium';
   return 'wide';
@@ -51,6 +55,7 @@ export function createShellState(): ShellState {
   const state: ShellState = {
     leftOpen: persisted('kloud-shell:left', true, offs),
     rightOpen: persisted('kloud-shell:right', true, offs),
+    mobilePanelOpen: new Signal(false),
     focusMode: new Signal(false),
     filmstripOpen: persisted('kloud-shell:filmstrip', true, offs),
     layout: new Signal<LayoutClass>(layoutFor(typeof window === 'undefined' ? 1440 : window.innerWidth)),

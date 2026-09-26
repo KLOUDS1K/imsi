@@ -44,7 +44,7 @@ export interface GeometryFeature {
 }
 
 export interface PanelsFeature {
-  createDevelopRightPanel(ctx: AppContext): Mounted;
+  createDevelopRightPanel(ctx: AppContext, opts?: { onMobileClose?: () => void }): Mounted;
   createDevelopLeftPanel(ctx: AppContext, opts: { navigator?: HTMLElement }): Mounted;
   registerPanelCommands(ctx: AppContext): () => void;
 }

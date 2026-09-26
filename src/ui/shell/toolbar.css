@@ -60,6 +60,10 @@
   display: none;
 }
 
+.k-tb__mobile-title {
+  display: none;
+}
+
 /* Tablet: tighter search, no text on the module switch icons already shown. */
 @media (max-width: 1024px) {
   .k-tb__search {
@@ -126,6 +130,91 @@
 
 @media (max-width: 420px) {
   .k-tb__search {
+    display: none;
+  }
+}
+
+/* Phone Develop header: one clear back/title area and only immediate actions.
+   The desktop toolbar is untouched because these rules key off shell layout. */
+.k-app[data-layout='phone'][data-module='develop'] .k-tb {
+  min-height: 48px;
+  height: 48px;
+  gap: 2px;
+  padding-inline: max(6px, env(safe-area-inset-left)) max(6px, env(safe-area-inset-right));
+}
+
+.k-app[data-layout='phone'][data-module='develop'] .k-tb .k-nav-arrows,
+.k-app[data-layout='phone'][data-module='develop'] .k-tb .k-breadcrumb-nav,
+.k-app[data-layout='phone'][data-module='develop'] .k-tb__modules,
+.k-app[data-layout='phone'][data-module='develop'] .k-tb__drawer-group,
+.k-app[data-layout='phone'][data-module='develop'] .k-tb__utility,
+.k-app[data-layout='phone'][data-module='develop'] .k-tb__paneltoggle,
+.k-app[data-layout='phone'][data-module='develop'] .k-tb .k-toolbar__divider,
+.k-app[data-layout='phone'][data-module='develop'] .k-tb > .k-toolbar__spacer {
+  display: none;
+}
+
+.k-app[data-layout='phone'][data-module='develop'] .k-tb__mobile-title {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 6px;
+  line-height: 1.15;
+}
+
+.k-app[data-layout='phone'][data-module='develop'] .k-tb__publish .k-btn__label,
+.k-app[data-layout='phone'][data-module='develop'] .k-tb__export .k-btn__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.k-tb__mobile-file,
+.k-tb__mobile-context {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.k-tb__mobile-file {
+  color: var(--k-text);
+  font-size: var(--k-fs-sm);
+  font-weight: var(--k-fw-semibold);
+}
+
+.k-tb__mobile-context {
+  margin-top: 2px;
+  color: var(--k-text-muted);
+  font-size: 10px;
+}
+
+.k-app[data-layout='phone'][data-module='develop'] .k-tb__develop {
+  display: flex;
+  gap: 0;
+}
+
+.k-app[data-layout='phone'][data-module='develop'] .k-tb__before {
+  display: inline-grid;
+}
+
+.k-app[data-layout='phone'][data-module='develop'] .k-tb .k-iconbtn,
+.k-app[data-layout='phone'][data-module='develop'] .k-tb__publish,
+.k-app[data-layout='phone'][data-module='develop'] .k-tb__export {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  margin-left: 0;
+  padding: 0;
+}
+
+@media (max-width: 360px) {
+  .k-app[data-layout='phone'][data-module='develop'] .k-tb__develop .k-iconbtn:nth-child(2),
+  .k-app[data-layout='phone'][data-module='develop'] .k-tb__before {
     display: none;
   }
 }

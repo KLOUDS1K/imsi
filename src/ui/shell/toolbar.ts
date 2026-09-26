@@ -25,8 +25,8 @@ import {
   type Crumb,
   type MenuItem,
 } from '@/ui/kit';
-import { Disposer } from '@/ui/dom';
-import type { AppModule } from '@/app/context';
+import { Disposer, h } from '@/ui/dom';
+import type { AppModule, DevelopTool } from '@/app/context';
 import type { AppRuntime } from '@/app/createContext';
 import { SORT_LABELS, type ShellState } from './state';
 
@@ -48,6 +48,13 @@ export interface AppToolbar {
 }
 
 const SORTS: LibrarySort[] = ['date-taken', 'date-added', 'edited', 'name', 'rating', 'camera', 'iso', 'focal-length', 'size'];
+const TOOLS_LABEL: Record<DevelopTool, string> = {
+  edit: 'Adjust',
+  crop: 'Crop & rotate',
+  heal: 'Retouch',
+  masks: 'Masks',
+  ai: 'AI & KLOUD Style',
+};
 
 export function createAppToolbar(rt: AppRuntime, state: ShellState, actions: ToolbarActions): AppToolbar {
   const { ctx } = rt;
@@ -177,6 +184,17 @@ export function createAppToolbar(rt: AppRuntime, state: ShellState, actions: Too
   d.add(state.rightOpen.subscribe((v) => rightToggle.setPressed(v)));
   d.add(ctx.view.subscribe((v) => before.setPressed(v.compare !== 'off')));
 
+  const mobileFile = h('span', { class: 'k-tb__mobile-file' }, 'KLOUD Studio');
+  const mobileContext = h('span', { class: 'k-tb__mobile-context' }, 'Develop');
+  const mobileTitle = h('div', { class: 'k-tb__mobile-title', attrs: { 'aria-live': 'polite' } }, mobileFile, mobileContext);
+  const updateMobileTitle = (): void => {
+    mobileFile.textContent = ctx.doc.value?.record.name ?? 'KLOUD Studio';
+    mobileContext.textContent = TOOLS_LABEL[ctx.tool.value] ?? 'Develop';
+  };
+  d.add(ctx.doc.subscribe(updateMobileTitle));
+  d.add(ctx.tool.subscribe(updateMobileTitle));
+  updateMobileTitle();
+
   let unsubStore: (() => void) | null = null;
   const syncHistory = (): void => {
     const store = ctx.doc.value?.store;
@@ -240,8 +258,11 @@ export function createAppToolbar(rt: AppRuntime, state: ShellState, actions: Too
   // The drawer button is responsive-only, while a host-provided exit action
   // must remain available at every viewport size.
   const exitGroup = exitBtn ? toolbarGroup(exitBtn.el) : null;
+  exitGroup?.classList.add('k-tb__exit-group');
   const drawerGroup = toolbarGroup(menuBtn.el);
   drawerGroup.classList.add('k-tb__drawer-group');
+  const utilityGroup = toolbarGroup(theme.el, lock.el, help.el);
+  utilityGroup.classList.add('k-tb__utility');
   const el = createToolbar({
     label: 'Toolbar',
     class: 'k-tb',
@@ -251,10 +272,11 @@ export function createAppToolbar(rt: AppRuntime, state: ShellState, actions: Too
       arrows.el,
       crumbs.el,
       moduleSwitch.el,
+      mobileTitle,
       toolbarSpacer(),
       libraryGroup,
       developGroup,
-      toolbarGroup(theme.el, lock.el, help.el),
+      utilityGroup,
       ...(publishBtn ? [publishBtn.el] : []),
       exportBtn.el,
     ],

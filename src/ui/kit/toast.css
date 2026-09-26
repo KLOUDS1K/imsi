@@ -15,6 +15,10 @@
   pointer-events: none;
 }
 
+body:has(.k-app[data-layout='phone'][data-module='develop']) .k-toaster {
+  bottom: calc(74px + env(safe-area-inset-bottom));
+}
+
 .k-toast {
   display: flex;
   align-items: center;

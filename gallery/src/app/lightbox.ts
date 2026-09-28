@@ -138,11 +138,17 @@ function teardown(): void {
   if (app) app.inert = false
   document.removeEventListener('keydown', onKey, true)
   window.removeEventListener('resize', onResize)
+  window.visualViewport?.removeEventListener('resize', onResize)
+  host.style.removeProperty('--viewer-viewport-height')
   restoreFocus?.focus?.()
   restoreFocus = null
 }
 
 function onResize(): void {
+  if (host) {
+    const height = window.visualViewport?.height ?? window.innerHeight
+    host.style.setProperty('--viewer-viewport-height', `${Math.max(1, Math.round(height))}px`)
+  }
   refit?.()
 }
 
@@ -481,7 +487,7 @@ function paint(photo: Photo): void {
   }) : null
 
   const closeBtn = el('button', {
-    class: 'viewer__btn viewer__btn--icon', type: 'button', title: 'Close (Esc)', 'aria-label': 'Close', html: icon('close'),
+    class: 'viewer__btn viewer__btn--icon viewer__btn--close', type: 'button', title: 'Close (Esc)', 'aria-label': 'Close', html: icon('close'),
   })
   closeBtn.addEventListener('click', close)
 
@@ -607,6 +613,7 @@ function paint(photo: Photo): void {
 
   host.append(bar, stage, caption)
   showVariant(selected)
+  onResize()
   requestAnimationFrame(() => {
     host?.classList.add('is-open')
     closeBtn.focus()
@@ -636,5 +643,6 @@ export function syncViewer(photoId: string | null): void {
   restoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   document.addEventListener('keydown', onKey, true)
   window.addEventListener('resize', onResize)
+  window.visualViewport?.addEventListener('resize', onResize)
   morph(thumbnailFor(photoId), () => paint(photo), () => stageImg)
 }

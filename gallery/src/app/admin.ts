@@ -16,6 +16,7 @@ import { uploadPhoto } from './upload'
 import { loadStats, statsPanel } from './stats'
 import { takeStudioLoginReturn } from './studio-link'
 import { go } from './router'
+import { ACCEPT_ATTRIBUTE as PHOTO_ACCEPT, isSupportedFile as looksLikePhoto } from '../../../src/editor/io/formats'
 
 /** Today, offered as a placeholder for people who name folders by date. */
 function today(): string {
@@ -386,16 +387,6 @@ function deletePhoto(photo: Photo): void {
 }
 
 // ------------------------------------------------------------------ uploads
-
-const PHOTO_EXTENSIONS =
-  /\.(jpe?g|png|webp|gif|avif|heic|heif|tiff?|bmp|dng|cr2|cr3|nef|arw|raf|orf|rw2|srw|pef)$/i
-const PHOTO_ACCEPT = [
-  'image/*', '.dng', '.cr2', '.cr3', '.nef', '.arw', '.raf', '.orf', '.rw2', '.srw', '.pef',
-].join(',')
-
-function looksLikePhoto(file: File): boolean {
-  return file.type.startsWith('image/') || PHOTO_EXTENSIONS.test(file.name)
-}
 
 interface Pending {
   /** Folder names, relative to the drop target. Empty means the target itself. */

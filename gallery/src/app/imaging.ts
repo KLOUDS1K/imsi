@@ -7,6 +7,7 @@
  * is uploaded byte-for-byte as its own R2 object and these derivatives are
  * written to separate keys.
  */
+import { isRawFile } from '../../../src/editor/io/formats'
 
 /** Long edge, in pixels, for each generated size. */
 const PREVIEW_EDGE = 2400
@@ -32,8 +33,10 @@ export interface Derivatives {
   warning: string | null
 }
 
-/** Decodes the file, honouring EXIF orientation so phone shots are upright. */
-async function decode(file: File): Promise<ImageBitmap | HTMLImageElement | null> {
+type Drawable = ImageBitmap | HTMLImageElement | HTMLCanvasElement
+
+/** Browser-native decode for ordinary web formats. */
+async function decodeNative(file: Blob): Promise<ImageBitmap | HTMLImageElement | null> {
   if ('createImageBitmap' in window) {
     try {
       return await createImageBitmap(file, { imageOrientation: 'from-image' })
@@ -57,7 +60,45 @@ async function decode(file: File): Promise<ImageBitmap | HTMLImageElement | null
   })
 }
 
-function dimensionsOf(source: ImageBitmap | HTMLImageElement): { w: number; h: number } {
+/**
+ * RAW files are not browser images. Prefer their embedded camera JPEG because
+ * it is fast and colour-correct enough for gallery browsing; if a file has no
+ * usable preview, fall back to a half-size LibRaw development. The untouched
+ * RAW original is still uploaded separately and Studio decodes that original.
+ */
+async function decodeRaw(file: File): Promise<HTMLCanvasElement | null> {
+  if (!isRawFile(file)) return null
+  try {
+    const io = await import('../../../src/editor/io')
+    let decoded
+    try {
+      decoded = await io.decodeFile(file, file.name, { maxSize: PREVIEW_EDGE, preferEmbeddedPreview: true })
+    } catch {
+      decoded = await io.decodeFile(file, file.name, { maxSize: PREVIEW_EDGE })
+    }
+    const pixels = io.toSrgb8(decoded.source)
+    const canvas = makeCanvas(pixels.width, pixels.height)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    const image = ctx.createImageData(pixels.width, pixels.height)
+    image.data.set(pixels.data)
+    ctx.putImageData(image, 0, 0)
+    return canvas
+  } catch (error) {
+    console.warn('[gallery] RAW preview decode failed', error)
+    return null
+  }
+}
+
+/** Decodes the file, honouring EXIF orientation so phone shots are upright. */
+async function decode(file: File): Promise<Drawable | null> {
+  if (isRawFile(file)) return decodeRaw(file)
+  const native = await decodeNative(file)
+  if (native) return native
+  return null
+}
+
+function dimensionsOf(source: Drawable): { w: number; h: number } {
   if ('naturalWidth' in source) return { w: source.naturalWidth, h: source.naturalHeight }
   return { w: source.width, h: source.height }
 }

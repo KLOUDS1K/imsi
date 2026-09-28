@@ -165,3 +165,71 @@ test('lightbox prefers edits, switches versions, exposes both downloads, and zoo
   const afterWheel = await figure.evaluate((node) => getComputedStyle(node).transform);
   expect(afterWheel).not.toBe(beforeWheel);
 });
+
+test('lightbox toolbar stays separated and fitted on a narrow Android viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  const photo = {
+    id: PHOTO_ID,
+    folderId: '',
+    title: 'Samsung viewer',
+    date: null,
+    location: '',
+    description: '',
+    width: 6000,
+    height: 4000,
+    placeholder: null,
+    filename: 'DSC00470.jpeg',
+    size: PNG.byteLength,
+    type: 'image/jpeg',
+    createdAt: 1,
+    thumbUrl: `/media/t/${PHOTO_ID}?sig=test`,
+    previewUrl: `/media/p/${PHOTO_ID}?sig=test`,
+    originalThumbUrl: `/media/t/${PHOTO_ID}?sig=test`,
+    originalPreviewUrl: `/media/p/${PHOTO_ID}?sig=test`,
+    originalUrl: `/media/o/${PHOTO_ID}?sig=test`,
+    editedUrl: null,
+    editedPreviewUrl: null,
+    editedThumbUrl: null,
+    editedFilename: null,
+    editedSize: null,
+    editedType: null,
+    editedWidth: null,
+    editedHeight: null,
+    editedUpdatedAt: null,
+  };
+
+  await page.route('**/api/tree', (route) => route.fulfill({ json: { folders: [], admin: false, siteTitle: 'KLOUD.PHOTOGRAPHY' } }));
+  await page.route('**/api/browse?**', (route) => route.fulfill({ json: { folder: null, path: [], folders: [], photos: [photo], admin: false, lock: null } }));
+  await page.route('**/api/hit', (route) => route.fulfill({ json: { ok: true } }));
+  await page.route('**/media/**', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: PNG }));
+
+  await page.goto('/');
+  await page.getByRole('link', { name: 'View Samsung viewer' }).click();
+
+  const lightbox = page.locator('[data-role="lightbox"]');
+  const bar = lightbox.locator('.viewer__bar');
+  const tools = lightbox.locator('.viewer__tools');
+  const original = lightbox.getByRole('button', { name: 'Download the original of Samsung viewer' });
+  const close = lightbox.getByRole('button', { name: 'Close' });
+  await expect(lightbox.locator('.viewer__id')).toBeHidden();
+
+  const [barBox, toolsBox, originalBox, closeBox] = await Promise.all([
+    bar.boundingBox(),
+    tools.boundingBox(),
+    original.boundingBox(),
+    close.boundingBox(),
+  ]);
+  expect(barBox).not.toBeNull();
+  expect(toolsBox).not.toBeNull();
+  expect(originalBox).not.toBeNull();
+  expect(closeBox).not.toBeNull();
+  expect(toolsBox!.x).toBeGreaterThanOrEqual(barBox!.x);
+  expect(toolsBox!.x + toolsBox!.width).toBeLessThanOrEqual(barBox!.x + barBox!.width);
+  expect(originalBox!.x + originalBox!.width).toBeLessThanOrEqual(closeBox!.x);
+
+  const viewportFit = await lightbox.evaluate((node) => ({
+    lightboxHeight: node.getBoundingClientRect().height,
+    visualHeight: window.visualViewport?.height ?? window.innerHeight,
+  }));
+  expect(Math.abs(viewportFit.lightboxHeight - viewportFit.visualHeight)).toBeLessThanOrEqual(1);
+});

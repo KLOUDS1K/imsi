@@ -2,15 +2,21 @@
 html,
 body {
   height: 100%;
+  width: 100%;
+  overflow: hidden;
 }
 .k-root {
   height: 100%;
+  width: 100%;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 .k-app {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
+  width: 100%;
   min-height: 0;
   background: var(--k-bg);
   color: var(--k-text);
@@ -183,15 +189,15 @@ body {
   right: 0;
   bottom: 0;
   left: 0;
-  height: var(--k-mobile-sheet-height, min(58dvh, 560px));
+  height: var(--k-mobile-sheet-height, min(58vh, 560px));
   min-height: 230px;
   max-height: calc(100% - 8px);
 }
 .k-app[data-layout='phone'][data-module='develop'] .k-app__right > [data-mobile-snap='compact'] {
-  --k-mobile-sheet-height: min(38dvh, 360px);
+  --k-mobile-sheet-height: min(38vh, 360px);
 }
 .k-app[data-layout='phone'][data-module='develop'] .k-app__right > [data-mobile-snap='half'] {
-  --k-mobile-sheet-height: min(58dvh, 560px);
+  --k-mobile-sheet-height: min(58vh, 560px);
 }
 .k-app[data-layout='phone'][data-module='develop'] .k-app__right > [data-mobile-snap='full'] {
   --k-mobile-sheet-height: calc(100% - 8px);
@@ -204,10 +210,23 @@ body {
   min-height: var(--k-mobile-dock-h);
   padding: 4px max(6px, env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
   border-top: 1px solid var(--k-border);
+  background: var(--k-toolbar);
   background: color-mix(in srgb, var(--k-toolbar) 94%, transparent);
   box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.08);
   backdrop-filter: blur(18px) saturate(1.25);
   -webkit-backdrop-filter: blur(18px) saturate(1.25);
+}
+
+@supports (height: 1dvh) {
+  .k-app[data-layout='phone'][data-module='develop'] .k-app__right > * {
+    height: var(--k-mobile-sheet-height, min(58dvh, 560px));
+  }
+  .k-app[data-layout='phone'][data-module='develop'] .k-app__right > [data-mobile-snap='compact'] {
+    --k-mobile-sheet-height: min(38dvh, 360px);
+  }
+  .k-app[data-layout='phone'][data-module='develop'] .k-app__right > [data-mobile-snap='half'] {
+    --k-mobile-sheet-height: min(58dvh, 560px);
+  }
 }
 .k-mobile-dock__button {
   position: relative;

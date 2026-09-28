@@ -17,7 +17,7 @@ const RAW_EXTENSIONS: Record<string, RawFormat> = {
   raf: 'RAF',
   orf: 'ORF',
   rw2: 'RW2',
-  raw: 'RW2',
+  raw: 'OTHER',
   pef: 'PEF',
   srw: 'SRW',
   '3fr': 'OTHER',
@@ -63,6 +63,23 @@ const MIME_BY_FORMAT: Record<PhotoFormat, string> = {
   unknown: 'application/octet-stream',
 };
 
+const RAW_MIME = new Set([
+  'image/x-adobe-dng',
+  'image/dng',
+  'image/raw',
+  'image/x-raw',
+  'image/arw',
+  'image/x-sony-arw',
+  'image/x-canon-cr2',
+  'image/x-canon-cr3',
+  'image/x-nikon-nef',
+  'image/x-fuji-raf',
+  'image/x-olympus-orf',
+  'image/x-panasonic-rw2',
+  'image/x-pentax-pef',
+  'image/x-samsung-srw',
+]);
+
 const SUPPORTED_MIME = new Set([
   'image/jpeg',
   'image/pjpeg',
@@ -74,17 +91,7 @@ const SUPPORTED_MIME = new Set([
   'image/tiff',
   'image/heic',
   'image/heif',
-  'image/x-adobe-dng',
-  'image/dng',
-  'image/x-sony-arw',
-  'image/x-canon-cr2',
-  'image/x-canon-cr3',
-  'image/x-nikon-nef',
-  'image/x-fuji-raf',
-  'image/x-olympus-orf',
-  'image/x-panasonic-rw2',
-  'image/x-pentax-pef',
-  'image/x-samsung-srw',
+  ...RAW_MIME,
 ]);
 
 /** For `<input accept>`: every extension plus the image MIME wildcard. */
@@ -98,6 +105,10 @@ export function extensionOf(name: string): string {
 
 export function isRawFileName(name: string): boolean {
   return extensionOf(name) in RAW_EXTENSIONS;
+}
+
+export function isRawFile(file: { name: string; type?: string }): boolean {
+  return isRawFileName(file.name) || RAW_MIME.has((file.type ?? '').toLowerCase());
 }
 
 export function rawFormatFromName(name: string): RawFormat | undefined {

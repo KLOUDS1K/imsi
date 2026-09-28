@@ -5,8 +5,50 @@ import { readHead } from './binary';
 import { normalizeCameraName } from './camera-names';
 import { headerInfo } from './dimensions';
 import { detectFormat } from './formats';
+import { num as tiffNum, readTiffBlocks, str as tiffStr } from './tiff-ifd';
 
 type Tags = Record<string, unknown>;
+
+/**
+ * EXIF parsers occasionally decline vendor RAW containers even though their
+ * ordinary TIFF/EXIF blocks are readable. Keep the core camera, orientation
+ * and exposure fields available so embedded-preview and LibRaw decoding do
+ * not start from an incorrectly unrotated, metadata-free file.
+ */
+function tiffFallbackTags(head: Uint8Array): Tags {
+  const blocks = readTiffBlocks(head);
+  if (!blocks) return {};
+  const { ifd0, exif } = blocks;
+  const tags: Tags = {};
+  const put = (key: string, value: unknown): void => {
+    if (value !== undefined && value !== '') tags[key] = value;
+  };
+
+  put('Make', tiffStr(ifd0, 271));
+  put('Model', tiffStr(ifd0, 272));
+  put('Orientation', tiffNum(ifd0, 274));
+  put('Software', tiffStr(ifd0, 305));
+  put('ModifyDate', tiffStr(ifd0, 306));
+  put('ImageWidth', tiffNum(ifd0, 256));
+  put('ImageHeight', tiffNum(ifd0, 257));
+
+  put('ExposureTime', tiffNum(exif, 33434));
+  put('FNumber', tiffNum(exif, 33437));
+  put('ISO', tiffNum(exif, 34855));
+  put('DateTimeOriginal', tiffStr(exif, 36867));
+  put('CreateDate', tiffStr(exif, 36868));
+  put('ApertureValue', tiffNum(exif, 37378));
+  put('ExposureBiasValue', tiffNum(exif, 37380));
+  put('Flash', tiffNum(exif, 37385));
+  put('FocalLength', tiffNum(exif, 37386));
+  put('ColorSpace', tiffNum(exif, 40961));
+  put('ExifImageWidth', tiffNum(exif, 40962));
+  put('ExifImageHeight', tiffNum(exif, 40963));
+  put('FocalLengthIn35mmFormat', tiffNum(exif, 41989));
+  put('LensMake', tiffStr(exif, 42035));
+  put('LensModel', tiffStr(exif, 42036));
+  return tags;
+}
 
 const num = (v: unknown): number | undefined => {
   if (typeof v === 'number' && Number.isFinite(v)) return v;
@@ -82,9 +124,10 @@ export async function readMetadata(file: Blob, name: string): Promise<PhotoMeta>
     orientation: 1,
     bitDepth: 8,
   };
-  let tags: Tags = {};
+  const fallbackTags = tiffFallbackTags(head);
+  let tags: Tags = fallbackTags;
   try {
-    tags =
+    const parsed =
       ((await exifr.parse(file, {
         tiff: true,
         exif: true,
@@ -99,8 +142,9 @@ export async function readMetadata(file: Blob, name: string): Promise<PhotoMeta>
         reviveValues: true,
         mergeOutput: true,
       })) as Tags | undefined) ?? {};
+    tags = { ...fallbackTags, ...parsed };
   } catch {
-    tags = {};
+    tags = fallbackTags;
   }
   meta = metaFromTags(meta, tags);
   const hi = headerInfo(head);

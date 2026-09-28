@@ -64,6 +64,25 @@ export async function mountKloudEditor(root: HTMLElement, options: MountOptions 
   const rt = await createContext({ root, theme: options.theme, initialModule: options.initialModule, embedded: options.embedded });
   const { ctx } = rt;
   const d = new Disposer();
+  // Android Chromium variants disagree about whether 100vh/100dvh includes
+  // the collapsing browser bars. Drive the standalone editor from the visual
+  // viewport when it is available so the grid never grows underneath them.
+  if (!options.embedded) {
+    const syncViewportHeight = (): void => {
+      const height = window.visualViewport?.height ?? window.innerHeight;
+      root.style.setProperty('--k-viewport-height', `${Math.max(1, Math.round(height))}px`);
+    };
+    syncViewportHeight();
+    window.addEventListener('resize', syncViewportHeight, { passive: true });
+    window.addEventListener('orientationchange', syncViewportHeight, { passive: true });
+    window.visualViewport?.addEventListener('resize', syncViewportHeight, { passive: true });
+    d.add(() => {
+      window.removeEventListener('resize', syncViewportHeight);
+      window.removeEventListener('orientationchange', syncViewportHeight);
+      window.visualViewport?.removeEventListener('resize', syncViewportHeight);
+      root.style.removeProperty('--k-viewport-height');
+    });
+  }
   const state = createShellState();
   d.add(() => state.dispose());
   d.add(registerAppCommands(rt));

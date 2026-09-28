@@ -3,6 +3,7 @@
 .app {
   display: grid;
   grid-template-rows: var(--chrome-h) minmax(0, 1fr) var(--status-h);
+  height: 100vh;
   height: 100dvh;
 }
 

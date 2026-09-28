@@ -453,6 +453,39 @@ test.describe.serial('KLOUD Studio', () => {
     await expect(page.locator('.k-app')).toHaveClass(/is-right-open/);
     await expect(page.getByRole('complementary', { name: 'Develop panel' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Light', exact: true })).toBeVisible();
+
+    const exposure = page.getByRole('slider', { name: 'Exposure' });
+    const slider = page.locator('.k-slider', { has: exposure });
+    const track = slider.locator('.k-slider__track');
+    const trackBox = (await track.boundingBox())!;
+    await page.mouse.move(trackBox.x + trackBox.width * 0.55, trackBox.y + trackBox.height / 2);
+    await page.mouse.down();
+    await expect(page.locator('.k-pnl-right')).toHaveClass(/is-mobile-adjusting/);
+    const adjusting = await page.evaluate(() => {
+      const panel = document.querySelector('.k-pnl-right') as HTMLElement;
+      const scroller = panel.querySelector('.k-pnl__scroll') as HTMLElement;
+      const active = panel.querySelector('.k-slider.is-mobile-adjusting') as HTMLElement;
+      const root = document.querySelector('.k-root') as HTMLElement;
+      return {
+        panelBackground: getComputedStyle(panel).backgroundColor,
+        scrollVisibility: getComputedStyle(scroller).visibility,
+        sliderVisibility: getComputedStyle(active).visibility,
+        sliderBottom: Math.round(root.getBoundingClientRect().bottom - active.getBoundingClientRect().bottom),
+        viewportHeight: getComputedStyle(root).getPropertyValue('--k-viewport-height').trim(),
+        rootHeight: Math.round(root.getBoundingClientRect().height),
+        visualHeight: Math.round(window.visualViewport?.height ?? window.innerHeight),
+      };
+    });
+    expect(adjusting.panelBackground).toBe('rgba(0, 0, 0, 0)');
+    expect(adjusting.scrollVisibility).toBe('hidden');
+    expect(adjusting.sliderVisibility).toBe('visible');
+    expect(adjusting.sliderBottom).toBeGreaterThan(60);
+    expect(adjusting.viewportHeight).toBe(`${adjusting.visualHeight}px`);
+    expect(Math.abs(adjusting.rootHeight - adjusting.visualHeight)).toBeLessThanOrEqual(1);
+    await page.mouse.move(trackBox.x + trackBox.width * 0.7, trackBox.y + trackBox.height / 2, { steps: 3 });
+    await page.mouse.up();
+    await expect(page.locator('.k-pnl-right')).not.toHaveClass(/is-mobile-adjusting/);
+
     await page.getByRole('button', { name: 'Color', exact: true }).click();
     await expect(page.getByText('Color Mixer', { exact: true })).toBeVisible();
 

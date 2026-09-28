@@ -134,6 +134,41 @@ export function createDevelopRightPanel(ctx: AppContext, opts: DevelopRightPanel
     body,
   );
 
+  // On phones the photo is the thing the user is judging. While a slider is
+  // held, collapse the sheet visually and float only that control over the
+  // canvas. Delegation also covers sliders created later when tools change.
+  let adjustingPointer: number | null = null;
+  let adjustingControl: HTMLElement | null = null;
+  const finishMobileAdjustment = (event?: PointerEvent): void => {
+    if (event && adjustingPointer !== null && event.pointerId !== adjustingPointer) return;
+    adjustingControl?.classList.remove('is-mobile-adjusting');
+    adjustingControl = null;
+    adjustingPointer = null;
+    el.classList.remove('is-mobile-adjusting');
+  };
+  d.add(
+    on(
+      el,
+      'pointerdown',
+      (event) => {
+        if (event.button !== 0 || adjustingPointer !== null) return;
+        const target = event.target instanceof Element ? event.target : null;
+        const track = target?.closest('.k-slider__track, .k-range__track');
+        const control = track?.closest<HTMLElement>('.k-slider, .k-range');
+        if (!control || control.classList.contains('is-disabled')) return;
+        adjustingPointer = event.pointerId;
+        adjustingControl = control;
+        control.classList.add('is-mobile-adjusting');
+        el.classList.add('is-mobile-adjusting');
+      },
+      { capture: true },
+    ),
+  );
+  d.add(on(el, 'pointerup', finishMobileAdjustment));
+  d.add(on(el, 'pointercancel', finishMobileAdjustment));
+  d.add(on(window, 'blur', () => finishMobileAdjustment()));
+  d.add(() => finishMobileAdjustment());
+
   type Snap = 'compact' | 'half' | 'full';
   const setSnap = (snap: Snap): void => {
     el.dataset.mobileSnap = snap;

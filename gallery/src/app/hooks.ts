@@ -21,6 +21,8 @@ export interface AdminHooks {
   renamePhoto(photo: Photo): void
   movePhoto(photo: Photo): void
   deletePhoto(photo: Photo): void
+  moveSelection(photoIds: string[], folderIds: string[], done: () => void): void
+  deleteSelection(photos: Photo[], folders: Folder[], done: () => void): void
 }
 
 let hooks: AdminHooks | null = null

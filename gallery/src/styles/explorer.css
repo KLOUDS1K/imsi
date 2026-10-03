@@ -328,8 +328,71 @@
 }
 .pane__actions {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex: none;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.pane__selected {
+  color: var(--ink-2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* Management mode works with a finger or keyboard in both grid and list views. */
+.is-organizing .card,
+.is-organizing .tile { cursor: pointer; }
+.is-organizing .card::after,
+.is-organizing .tile::after {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  top: 9px;
+  left: 9px;
+  width: 23px;
+  height: 23px;
+  border: 2px solid var(--ink-2);
+  border-radius: 50%;
+  background: var(--panel);
+  pointer-events: none;
+  text-align: center;
+  line-height: 19px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.is-organizing .card.is-selected::after,
+.is-organizing .tile.is-selected::after {
+  content: '✓';
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.is-organizing .card.is-selected .card__link,
+.is-organizing .tile.is-selected .tile__frame,
+.is-organizing .row.is-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background-color: var(--accent-soft);
+}
+.is-organizing .more-btn,
+.is-organizing .tile__dl { display: none; }
+.is-organizing .row .list__cell--name::before {
+  content: '';
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border: 2px solid var(--ink-2);
+  border-radius: 50%;
+}
+.is-organizing .row.is-selected .list__cell--name::before {
+  content: '✓';
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  text-align: center;
+  line-height: 14px;
+  font-weight: 700;
 }
 
 /* ------------------------------------------------------------------ section */

@@ -1,6 +1,13 @@
 /** Every call the browser makes. Admin routes fail with 401 unless signed in. */
 import type { BrowseResult, Folder, Photo, StatsReport } from '../shared/types'
 
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(url, {
     credentials: 'same-origin',
@@ -12,7 +19,7 @@ async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
     },
   })
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
-  if (!res.ok) throw new Error((body.error as string) ?? `Request failed (${res.status})`)
+  if (!res.ok) throw new ApiError(res.status, (body.error as string) ?? `Request failed (${res.status})`)
   return body as T
 }
 
@@ -48,6 +55,12 @@ export const api = {
   },
 
   stats: () => request<StatsReport>('/api/admin/stats'),
+
+  move: (destination: string, photoIds: string[], folderIds: string[]) =>
+    request<{ ok: true; movedPhotos: number; movedFolders: number }>('/api/admin/move', {
+      method: 'POST',
+      body: JSON.stringify({ destination, photoIds, folderIds }),
+    }),
 
   unlock: (folderId: string, password: string) =>
     request<{ ok: true }>('/api/unlock', {
@@ -99,6 +112,11 @@ export const api = {
         body: JSON.stringify(patch),
       }),
     remove: (id: string) => request<{ ok: true }>(`/api/admin/photos/${id}`, { method: 'DELETE' }),
+    cleanupUpload: (id: string) =>
+      request<{ ok: true; preserved?: boolean }>(`/api/admin/photos/${id}`, {
+        method: 'DELETE',
+        headers: { 'x-upload-cleanup': '1' },
+      }),
     commit: (id: string, body: Record<string, unknown>) =>
       request<{ ok: true; id: string }>(`/api/admin/photos/${id}`, {
         method: 'POST',

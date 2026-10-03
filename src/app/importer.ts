@@ -74,16 +74,15 @@ async function readDir(dir: FsDirEntry): Promise<FsEntry[]> {
     const batch = await new Promise<FsEntry[]>((ok, fail) => reader.readEntries(ok, fail));
     if (!batch.length) break;
     out.push(...batch);
-    if (out.length > MAX_DROP_FILES) break;
+    if (out.length > MAX_DROP_FILES) throw new Error(`A dropped folder contains more than ${MAX_DROP_FILES} files.`);
   }
   return out;
 }
 
 async function walk(entry: FsEntry, parent: string, groups: Map<string, File[]>, count: { n: number }): Promise<void> {
-  if (count.n >= MAX_DROP_FILES) return;
+  if (count.n >= MAX_DROP_FILES) throw new Error(`A drop may contain at most ${MAX_DROP_FILES} files.`);
   if (entry.isFile) {
-    const file = await new Promise<File>((ok, fail) => (entry as FsFileEntry).file(ok, fail)).catch(() => null);
-    if (!file) return;
+    const file = await new Promise<File>((ok, fail) => (entry as FsFileEntry).file(ok, fail));
     count.n++;
     const list = groups.get(parent) ?? [];
     list.push(file);
@@ -98,13 +97,29 @@ async function walk(entry: FsEntry, parent: string, groups: Map<string, File[]>,
 /** Collect dropped files, descending into dropped folders. */
 export async function collectDropped(dt: DataTransfer): Promise<FileGroup[]> {
   const items = Array.from(dt.items ?? []).filter((i) => i.kind === 'file');
-  const entries = items
-    .map((i) => (typeof i.webkitGetAsEntry === 'function' ? (i.webkitGetAsEntry() as FsEntry | null) : null))
-    .filter((e): e is FsEntry => !!e);
-  if (!entries.length) return [{ folder: '', files: Array.from(dt.files ?? []) }];
+  if (!items.length) return [{ folder: '', files: Array.from(dt.files ?? []) }];
+  // DataTransferItem file handles expire as soon as the drop handler returns.
+  // Claim *every* entry/file before the first await, then traverse the handles.
+  const claimed = items.map((item) => {
+    const entry = typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() as FsEntry | null : null;
+    return { entry, file: entry ? null : item.getAsFile() };
+  });
+  if (claimed.some(({ entry, file }) => !entry && !file)) {
+    throw new Error('A dropped file could not be read. Try the file picker instead.');
+  }
   const groups = new Map<string, File[]>();
   const count = { n: 0 };
-  for (const e of entries) await walk(e, '', groups, count);
+  for (const { entry, file } of claimed) {
+    if (entry) await walk(entry, '', groups, count);
+    else {
+      if (!file) continue; // checked before traversal
+      if (count.n >= MAX_DROP_FILES) throw new Error(`A drop may contain at most ${MAX_DROP_FILES} files.`);
+      count.n++;
+      const loose = groups.get('') ?? [];
+      loose.push(file);
+      groups.set('', loose);
+    }
+  }
   return [...groups.entries()].map(([folder, files]) => ({ folder, files }));
 }
 
@@ -120,6 +135,11 @@ export interface ImportRunOptions {
   isSupported?: (f: File) => boolean;
   /** Open the first imported photo afterwards? (default: select them) */
   onImported?: (ids: string[]) => void;
+}
+
+function sampleNames(names: string[]): string {
+  const shown = names.slice(0, 3).join(', ');
+  return names.length > 3 ? `${shown} +${names.length - 3} more` : shown;
 }
 
 /**
@@ -138,6 +158,11 @@ export async function runImport(ctx: AppContext, busy: BusyTracker, groups: File
   let before = 0;
   const task = busy.begin(`Importing ${total} ${total === 1 ? 'file' : 'files'}…`, 0);
   const ids: string[] = [];
+  const failed: { name: string; message: string }[] = [];
+  const warnings: string[] = [];
+  let duplicates = 0;
+  let unsupported = 0;
+  let fatalError = false;
   try {
     for (const g of groups) {
       if (!g.files.length) continue;
@@ -145,25 +170,36 @@ export async function runImport(ctx: AppContext, busy: BusyTracker, groups: File
         const done = before + p.done;
         task.update(done / total, `Importing ${done}/${total}${p.current ? ` · ${p.current}` : ''}`);
       };
-      const recs = await ctx.library.importFiles(g.files, g.folder ? { folder: g.folder, onProgress } : { onProgress });
-      ids.push(...recs.map((r) => r.id));
+      const report = await ctx.library.importFilesDetailed(g.files, g.folder ? { folder: g.folder, onProgress } : { onProgress });
+      ids.push(...report.imported.map((r) => r.id));
+      failed.push(...report.failed);
+      warnings.push(...report.warnings.map((issue) => issue.name));
+      duplicates += report.duplicates.length;
+      unsupported += report.unsupported.length;
       before += g.files.length;
     }
   } catch (err) {
+    fatalError = true;
     ctx.toast(`Import failed: ${err instanceof Error ? err.message : String(err)}`, 'error', 6000);
   } finally {
     task.end();
   }
-  const skipped = total - ids.length;
   if (ids.length) {
+    const skipped = [duplicates && `${duplicates} duplicate${duplicates === 1 ? '' : 's'}`, unsupported && `${unsupported} unsupported`].filter(Boolean);
     ctx.toast(
-      `Imported ${ids.length} ${ids.length === 1 ? 'photo' : 'photos'}${skipped > 0 ? ` · ${skipped} skipped (duplicates or unsupported)` : ''}`,
+      `Imported ${ids.length} ${ids.length === 1 ? 'photo' : 'photos'}${skipped.length ? ` · ${skipped.join(' · ')}` : ''}`,
       'success',
     );
     ctx.selection.set(ids);
     opts.onImported?.(ids);
-  } else if (skipped > 0) {
-    ctx.toast('Nothing new to import: those photos are already in the library or not supported.', 'info');
+  } else if (!failed.length && !fatalError) {
+    ctx.toast(`Nothing new to import · ${duplicates} duplicate${duplicates === 1 ? '' : 's'} · ${unsupported} unsupported`, 'info');
+  }
+  if (failed.length) {
+    ctx.toast(`${failed.length} import ${failed.length === 1 ? 'failed' : 'failures'}: ${sampleNames(failed.map((issue) => `${issue.name} (${issue.message})`))}`, 'error', 8000);
+  }
+  if (warnings.length) {
+    ctx.toast(`${warnings.length} imported without a thumbnail: ${sampleNames(warnings)}`, 'error', 8000);
   }
   return ids;
 }

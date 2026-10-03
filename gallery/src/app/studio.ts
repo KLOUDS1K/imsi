@@ -1,6 +1,6 @@
 import '../styles/studio.css'
 import { activeStudioImport, requestStudioSignIn, takePendingStudioImport } from './studio-link'
-import { api } from './api'
+import { api, ApiError } from './api'
 import type { AppContext } from '../../../src/app/context'
 import type { ExportSettings } from '../../../src/editor/types'
 import { applyStoredTheme } from './state'
@@ -12,6 +12,45 @@ applyStoredTheme()
 const resize = (edge?: number): ExportSettings['resize'] => edge
   ? { mode: 'long-edge', value: edge, width: edge, height: edge, dontEnlarge: true }
   : { mode: 'none', value: 0, width: 0, height: 0, dontEnlarge: true }
+
+async function confirmEditedCommit(photoId: string, body: { revision: string; filename: string; width: number; height: number }): Promise<void> {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await api.photos.commitEdited(photoId, body)
+      return
+    } catch (error) {
+      const transient = !(error instanceof ApiError) || [408, 425, 429].includes(error.status) || error.status >= 500
+      if (!transient) throw error
+      if (attempt === 3) throw new Error('Could not confirm the edited save. Refresh the gallery before saving again.')
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 250 * attempt))
+    }
+  }
+}
+
+/** A duplicate library entry is reusable only if its bytes really are this archive original. */
+async function findMatchingLocalPhoto(ctx: AppContext, file: File): Promise<string | null> {
+  const candidates = ctx.library.all().filter((record) => record.name === file.name && record.size === file.size)
+  const chunkSize = 1024 * 1024
+  for (const record of candidates) {
+    const stored = await ctx.library.getFile(record.id)
+    if (!stored || stored.size !== file.size) continue
+    let equal = true
+    for (let start = 0; start < file.size && equal; start += chunkSize) {
+      const end = Math.min(start + chunkSize, file.size)
+      const [left, right] = await Promise.all([
+        file.slice(start, end).arrayBuffer(),
+        stored.slice(start, end).arrayBuffer(),
+      ])
+      const a = new Uint8Array(left)
+      const b = new Uint8Array(right)
+      for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) { equal = false; break }
+      }
+    }
+    if (equal) return record.id
+  }
+  return null
+}
 
 async function publishEdit(ctx: AppContext, photoId: string, originalName: string): Promise<void> {
   const doc = ctx.doc.value
@@ -50,7 +89,7 @@ async function publishEdit(ctx: AppContext, photoId: string, originalName: strin
 
   ctx.busy.set({ active: true, label: 'Saving edited version…', progress: 0 })
   let revision: string | null = null
-  let committed = false
+  let commitStarted = false
   try {
     const full = await make()
     ctx.busy.set({ active: true, label: 'Preparing gallery previews…', progress: 0.35 })
@@ -58,21 +97,26 @@ async function publishEdit(ctx: AppContext, photoId: string, originalName: strin
     const thumb = await make(800, 84)
     revision = crypto.randomUUID().replace(/-/g, '')
     ctx.busy.set({ active: true, label: 'Uploading edited version…', progress: 0.7 })
-    await Promise.all([
+    const uploaded = await Promise.allSettled([
       api.photos.uploadEdited(photoId, revision, 'full', full.blob),
       api.photos.uploadEdited(photoId, revision, 'preview', preview.blob),
       api.photos.uploadEdited(photoId, revision, 'thumb', thumb.blob),
     ])
-    await api.photos.commitEdited(photoId, {
+    const failed = uploaded.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+    if (failed) throw failed.reason
+    commitStarted = true
+    await confirmEditedCommit(photoId, {
       revision,
       filename: full.fileName,
       width: full.width,
       height: full.height,
     })
-    committed = true
     ctx.toast('Edited version saved to the gallery.', 'success')
   } catch (error) {
-    if (revision && !committed) {
+    // A lost commit response can precede a still-running DB update. Never
+    // discard this revision once commit started, even if the read currently
+    // says it is staging data.
+    if (revision && !commitStarted) {
       await api.photos.discardEditedUpload(photoId, revision).catch(() => undefined)
     }
     throw error
@@ -114,10 +158,16 @@ export async function bootStudio(): Promise<void> {
   host.className = 'studio-host'
   document.body.replaceChildren(host)
   document.documentElement.classList.add('app-ready')
+  let linkedLocalId: string | null = null
   const editor = await mountKloudEditor(host, {
     exit: { label: 'Back to photos', onExit: exitStudio },
     publish: pending
-      ? { label: 'Save to gallery', onPublish: (ctx) => publishEdit(ctx, pending.photoId, pending.name) }
+      ? { label: 'Save to gallery', onPublish: (ctx) => {
+          if (!linkedLocalId || ctx.doc.value?.photoId !== linkedLocalId) {
+            throw new Error('Open the linked gallery photo before saving it to the gallery.')
+          }
+          return publishEdit(ctx, pending.photoId, pending.name)
+        } }
       : undefined,
   })
 
@@ -133,14 +183,12 @@ export async function bootStudio(): Promise<void> {
       type: blob.type || pending.type || 'application/octet-stream',
       lastModified: Date.now(),
     })
-    await editor.importFiles([file])
-
-    const selected = editor.ctx.selection.value[0]
-      ?? editor.ctx.library.all().find((photo) => photo.name === pending.name)?.id
-    if (selected) {
-      await editor.ctx.openPhoto(selected)
-      editor.ctx.module.set('develop')
-    }
+    const imported = await editor.importFiles([file])
+    const selected = imported[0] ?? await findMatchingLocalPhoto(editor.ctx, file)
+    if (!selected) throw new Error('The archive original could not be linked to a Studio photo.')
+    linkedLocalId = selected
+    await editor.ctx.openPhoto(selected)
+    editor.ctx.module.set('develop')
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     editor.ctx.toast(`Could not open this photo in Studio: ${message}`, 'error', 7000)

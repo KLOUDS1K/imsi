@@ -23,6 +23,7 @@ interface Panel {
   host: HTMLElement
   head: HTMLElement
   list: HTMLElement
+  close: HTMLButtonElement
 }
 
 let panel: Panel | null = null
@@ -63,13 +64,17 @@ function ensurePanel(): Panel {
     }).observe(host)
   }
 
-  panel = { host, head, list }
+  panel = { host, head, list, close }
   return panel
 }
 
 function refreshHead(): void {
-  const head = panel?.head
-  if (!head) return
+  if (!panel) return
+  const { head, close } = panel
+  // Clearing rows mid-batch would reset the counters while uploads are still
+  // finishing. Keep the full result visible until the queue is complete.
+  close.disabled = active > 0
+  close.title = active > 0 ? 'Wait for uploads to finish' : 'Close'
   if (active > 0) {
     head.textContent = `Uploading ${completed + failed + 1} of ${completed + failed + active}`
   } else if (failed > 0) {
@@ -80,7 +85,7 @@ function refreshHead(): void {
 }
 
 function hide(): void {
-  if (!panel) return
+  if (!panel || active > 0) return
   panel.host.classList.remove('is-open')
   panel.host.hidden = true
   panel.list.innerHTML = ''

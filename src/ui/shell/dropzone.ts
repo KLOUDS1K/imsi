@@ -64,6 +64,8 @@ export function attachDropzone(rt: AppRuntime, host: HTMLElement): () => void {
       if (!dt) return;
       void rt.importDataTransfer(dt).then((ids) => {
         if (ids.length && rt.ctx.module.value === 'develop') void rt.ctx.openPhoto(ids[0]);
+      }).catch((error: unknown) => {
+        rt.ctx.toast(`Could not read all dropped files: ${error instanceof Error ? error.message : String(error)}`, 'error', 8000);
       });
     }),
   );

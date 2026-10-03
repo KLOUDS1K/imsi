@@ -28,6 +28,7 @@ import {
 } from './auth'
 import * as photos from './photos'
 import * as folders from './folders'
+import { validateFolderMove } from './organize'
 import {
   holdsGrant,
   issueGrant,
@@ -698,6 +699,51 @@ export async function handleApi(
     return json(await readStats(env))
   }
 
+  // Move a selection in one D1 transaction. Originals and edits remain at
+  // their stable R2 keys; only the folder relationships change.
+  if (path === '/api/admin/move' && method === 'POST') {
+    const b = await readJsonObject(request, 16 * 1024)
+    const destination = assertFolderId(b.destination)
+    if (!Array.isArray(b.photoIds) || !Array.isArray(b.folderIds)) badRequest('Invalid selection')
+    const rawPhotos = b.photoIds as unknown[]
+    const rawFolders = b.folderIds as unknown[]
+    if (!rawPhotos.length && !rawFolders.length) badRequest('Select files or folders to move')
+    if (rawPhotos.length + rawFolders.length > 200) badRequest('Move at most 200 items at a time')
+    const photoIds = rawPhotos.map((id) => assertId(typeof id === 'string' ? id : undefined))
+    const folderIds = rawFolders.map((id) => assertId(typeof id === 'string' ? id : undefined))
+    if (new Set(photoIds).size !== photoIds.length || new Set(folderIds).size !== folderIds.length) {
+      badRequest('Duplicate items in selection')
+    }
+
+    const allFolders = await folders.listAll(env, true)
+    validateFolderMove(allFolders, folderIds, destination)
+
+    if (photoIds.length) {
+      const marks = photoIds.map(() => '?').join(',')
+      const { results } = await env.DB.prepare(`SELECT id FROM photos WHERE id IN (${marks})`)
+        .bind(...photoIds).all<{ id: string }>()
+      if ((results ?? []).length !== photoIds.length) return error(404, 'Photo not found')
+    }
+
+    const now = Math.floor(Date.now() / 1000)
+    const statements = []
+    if (photoIds.length) {
+      const marks = photoIds.map(() => '?').join(',')
+      statements.push(env.DB.prepare(
+        `UPDATE photos SET folder_id = ?, updated_at = ? WHERE id IN (${marks})`,
+      ).bind(destination, now, ...photoIds))
+    }
+    if (folderIds.length) {
+      const marks = folderIds.map(() => '?').join(',')
+      statements.push(env.DB.prepare(
+        `UPDATE folders SET parent_id = ?, updated_at = ? WHERE id IN (${marks})`,
+      ).bind(destination, now, ...folderIds))
+    }
+    await env.DB.batch(statements)
+    await rotateSigningKey(env)
+    return json({ ok: true, movedPhotos: photoIds.length, movedFolders: folderIds.length })
+  }
+
   // --------------------------------------------------------------- folders
 
   if (path === '/api/admin/folders' && method === 'POST') {
@@ -868,6 +914,12 @@ export async function handleApi(
     const body = await readJsonObject(request)
     const revision = assertRevision(body.revision)
     const fullKey = keys.edited(id, revision)
+    // A previous attempt may have committed while its response was lost.
+    // Confirm the same immutable revision instead of rewriting its metadata.
+    if (current.edited_key === fullKey) {
+      const [photo] = await publicPhotos(env, [current], true)
+      return json({ ok: true, photo, alreadyCommitted: true })
+    }
     const previewKey = keys.editedPreview(id, revision)
     const thumbKey = keys.editedThumb(id, revision)
     const [full, preview, thumb] = await Promise.all([
@@ -945,7 +997,12 @@ export async function handleApi(
       const filename = safeFilename(decodeFilenameHeader(request.headers.get('x-filename') ?? 'photo'))
       const type = (request.headers.get('content-type') || 'application/octet-stream')
         .split(';')[0]!.trim().toLowerCase().slice(0, 120)
-      await deleteObjects(env, await listObjectKeys(env, `originals/${id}/`))
+      // Retried PUTs carry the same id and filename. Deleting before replacing
+      // would race a first request whose response was lost, leaving no original
+      // if the requests complete out of order. Overwrite the same key instead.
+      const originalKey = keys.original(id, filename)
+      const staged = await listObjectKeys(env, `originals/${id}/`)
+      if (staged.some((key) => key !== originalKey)) return error(409, 'A different original is already staged for this photo')
       const key = await putOriginal(env, id, filename, request.body, type)
       return json({ ok: true, key, filename })
     }
@@ -972,7 +1029,10 @@ export async function handleApi(
   const single = /^\/api\/admin\/photos\/([0-9a-f-]+)$/i.exec(path)
   if (single && method === 'POST') {
     const id = assertId(single[1])
-    if (await photos.getById(env, id)) return error(409, 'Photo already exists')
+    // The browser retries this request when a response is lost. If the first
+    // attempt already committed, acknowledge it instead of turning a healthy
+    // photo into a failure that client cleanup might remove.
+    if (await photos.getById(env, id)) return json({ ok: true, id, alreadyCommitted: true })
 
     const b = await readJsonObject(request)
     const folderId = assertFolderId(b.folderId)
@@ -1055,6 +1115,10 @@ export async function handleApi(
   if (single && method === 'DELETE') {
     const id = assertId(single[1])
     const row = await photos.getById(env, id)
+    const cleanupOnly = request.headers.get('x-upload-cleanup') === '1'
+    // Upload cleanup is allowed to remove orphaned staging objects, never a
+    // committed row. This closes the response-loss race at the client.
+    if (cleanupOnly && row) return json({ ok: true, preserved: true })
     // List rather than trust the row: this also purges the orphaned objects of
     // an upload that failed before its metadata was committed.
     const [listed, edited] = await Promise.all([

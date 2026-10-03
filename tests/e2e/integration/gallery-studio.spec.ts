@@ -20,6 +20,9 @@ test('gallery and Studio share one persisted light/dark theme', async ({ page })
   await page.route('**/api/hit', (route) => route.fulfill({ json: { ok: true } }));
 
   await page.goto('/');
+  // Let the initial tree and folder writes finish before simulating a theme
+  // choice made by Studio; an in-flight gallery update persists its old theme.
+  await expect(page.locator('[data-role="content"] .empty__title')).toBeVisible();
   await page.evaluate(() => {
     localStorage.setItem('kloud-theme', 'dark');
     localStorage.setItem('kloud.explorer.prefs', JSON.stringify({ view: 'grid', sortKey: 'date', sortDir: 'desc', theme: 'light', expanded: [] }));
@@ -88,8 +91,27 @@ test('gallery opens a stored original directly in Studio', async ({ page }) => {
   await expect(page.locator('.k-app[data-module="develop"]')).toBeVisible({ timeout: 30_000 });
   const back = page.getByRole('button', { name: 'Back to photos' });
   await expect(back).toBeVisible();
+  // A different local Studio photo must never be published over this archive
+  // photo merely because the handoff is still active in sessionStorage.
+  await page.evaluate(async () => {
+    const rt = (window as unknown as { __kloud: { ctx: any } }).__kloud;
+    const canvas = document.createElement('canvas');
+    canvas.width = 16; canvas.height = 16;
+    canvas.getContext('2d')!.fillRect(0, 0, 16, 16);
+    const blob = await new Promise<Blob>((resolve) => canvas.toBlob((value) => resolve(value!), 'image/png'));
+    const [other] = await rt.ctx.library.importFiles([new File([blob], 'unrelated.png', { type: 'image/png' })]);
+    await rt.ctx.openPhoto(other.id);
+  });
+  await page.getByRole('button', { name: 'Save to gallery' }).click();
+  await expect(page.getByText('Could not save: Open the linked gallery photo before saving it to the gallery.')).toBeVisible();
   await back.click();
   await expect(page).toHaveURL(new RegExp(`[?&]p=${PHOTO_ID}(?:&|$)`));
+
+  // Reopening the same original after a duplicate import should link its
+  // existing local copy, not whichever Studio photo was selected last.
+  await page.getByRole('button', { name: 'Edit the original of Studio handoff in KLOUD Studio' }).click();
+  await expect(page.locator('.k-app[data-module="develop"]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.k-sb__count')).toContainText('handoff.png');
 });
 
 test('anonymous visitors cannot see or open Studio', async ({ page }) => {

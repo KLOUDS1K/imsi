@@ -41,7 +41,8 @@ export interface MountOptions {
 export interface KloudEditorHandle {
   ctx: AppContext;
   destroy(): void;
-  importFiles(files: File[]): Promise<void>;
+  /** IDs actually imported (duplicates and failed files are omitted). */
+  importFiles(files: File[]): Promise<string[]>;
 }
 
 /** Keep the library UI's own signals in step with the shell toolbar controls. */
@@ -268,7 +269,7 @@ export async function mountKloudEditor(root: HTMLElement, options: MountOptions 
   return {
     ctx,
     async importFiles(files: File[]) {
-      await ctx.importFiles(files);
+      return rt.importGroups([{ folder: '', files }]);
     },
     destroy() {
       unmount();

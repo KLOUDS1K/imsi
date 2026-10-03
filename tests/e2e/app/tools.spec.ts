@@ -193,12 +193,22 @@ test.describe.serial('KLOUD Studio tools', () => {
   });
 
   test('undo / redo keys', async () => {
-    await page.locator('.k-viewer__stage').click({ position: { x: 4, y: 4 } });
-    await k(page, (rt) => rt.ctx.doc.value.store.set('basic.contrast', 33, { coalesceKey: null }));
+    // Earlier tool tests share this document and can leave transient state behind.
+    // Start this shortcut check from one settled history entry.
+    const previous = await k(page, (rt) => {
+      const store = rt.ctx.doc.value.store;
+      store.endGesture();
+      const value = store.get('basic.contrast');
+      store.clearHistory();
+      store.set('basic.contrast', value === 33 ? 34 : 33, { coalesceKey: null });
+      return value;
+    });
+    await page.locator('.k-viewer__stage').focus();
+    expect(await k(page, (rt) => rt.ctx.doc.value.store.historyIndex)).toBe(1);
     await page.keyboard.press('Control+z');
-    await expect.poll(async () => (await params(page)).basic.contrast).not.toBe(33);
+    await expect.poll(async () => (await params(page)).basic.contrast).toBe(previous);
     await page.keyboard.press('Control+Shift+z');
-    await expect.poll(async () => (await params(page)).basic.contrast).toBe(33);
+    await expect.poll(async () => (await params(page)).basic.contrast).toBe(previous === 33 ? 34 : 33);
   });
 
   test('arrow keys move to the next / previous photo', async () => {

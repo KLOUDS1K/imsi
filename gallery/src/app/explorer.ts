@@ -21,7 +21,7 @@ import {
 } from '../shared/types'
 import { icon } from './icons'
 import type { MenuItem } from './ui'
-import { el, need, openMenu, paintIcons } from './ui'
+import { el, need, openMenu, paintIcons, toast } from './ui'
 import { state, touch, update, ancestorsOf, childFolders } from './state'
 import { adminHooks } from './hooks'
 import { initPointerTilt, initScrollShade } from './motion'
@@ -39,6 +39,44 @@ let contentHost: HTMLElement
 let statusHost: HTMLElement
 let totalsHost: HTMLElement
 let paneHost: HTMLElement
+let organizing = false
+let selectionScope = ''
+const selection = new Set<string>()
+const MAX_SELECTION = 200
+
+function keyOf(kind: 'f' | 'p', id: string): string { return `${kind}:${id}` }
+
+function stopOrganizing(): void {
+  organizing = false
+  selection.clear()
+  touch()
+}
+
+function toggleSelection(kind: 'f' | 'p', id: string): void {
+  const key = keyOf(kind, id)
+  if (selection.has(key)) selection.delete(key)
+  else if (selection.size < MAX_SELECTION) selection.add(key)
+  else { toastLimit(); return }
+  touch()
+}
+
+function toastLimit(): void {
+  toast(`Select at most ${MAX_SELECTION} items`, 'error')
+}
+
+function chooseOnClick(event: MouseEvent, kind: 'f' | 'p', id: string): boolean {
+  if (!organizing) return false
+  event.preventDefault()
+  event.stopPropagation()
+  toggleSelection(kind, id)
+  return true
+}
+
+function chooseOnKeydown(event: KeyboardEvent, kind: 'f' | 'p', id: string): void {
+  if (!organizing || event.key !== ' ') return
+  event.preventDefault()
+  toggleSelection(kind, id)
+}
 
 // ------------------------------------------------------------------ sorting
 
@@ -262,12 +300,20 @@ function stagger(node: HTMLElement, index: number): HTMLElement {
 
 function folderCard(folder: FolderEntry, index = 0): HTMLElement {
   const card = stagger(
-    el('div', { class: 'card', 'data-folder': folder.id, 'data-drop-folder': folder.id }),
+    el('div', {
+      class: `card${selection.has(keyOf('f', folder.id)) ? ' is-selected' : ''}`,
+      'data-folder': folder.id, 'data-drop-folder': folder.id,
+    }),
     index,
   )
   const link = el(
     'a',
-    { class: 'card__link', href: folderHref(folder.id), 'data-link': true },
+    {
+      class: 'card__link', href: folderHref(folder.id), 'data-link': true,
+      role: organizing ? 'checkbox' : null,
+      'aria-checked': organizing ? String(selection.has(keyOf('f', folder.id))) : null,
+      'aria-label': organizing ? `Select folder ${folder.name}` : null,
+    },
     [
       folderGraphic(folder),
       el('span', { class: 'card__meta' }, [
@@ -284,6 +330,8 @@ function folderCard(folder: FolderEntry, index = 0): HTMLElement {
       ]),
     ],
   )
+  link.addEventListener('click', (event) => chooseOnClick(event, 'f', folder.id))
+  link.addEventListener('keydown', (event) => chooseOnKeydown(event, 'f', folder.id))
   card.append(link)
 
   if (adminHooks()) card.append(moreButton((x, y, anchor) => openFolderMenu(folder, x, y, anchor)))
@@ -298,7 +346,10 @@ function folderCard(folder: FolderEntry, index = 0): HTMLElement {
 function photoTile(photo: Photo, siblings: Photo[], index = 0): HTMLElement {
   const name = displayName(photo)
   const href = hrefFor({ folderId: photo.folderId, photoId: photo.id })
-  const tile = stagger(el('div', { class: 'tile', 'data-photo': photo.id }), index)
+  const tile = stagger(el('div', {
+    class: `tile${selection.has(keyOf('p', photo.id)) ? ' is-selected' : ''}`,
+    'data-photo': photo.id,
+  }), index)
   const frame = el('span', { class: 'tile__frame' })
 
   if (photo.placeholder) frame.style.backgroundImage = `url("${photo.placeholder}")`
@@ -331,14 +382,18 @@ function photoTile(photo: Photo, siblings: Photo[], index = 0): HTMLElement {
     class: 'tile__hit',
     href,
     'data-link': true,
-    'aria-label': `View ${name}`,
+    role: organizing ? 'checkbox' : null,
+    'aria-checked': organizing ? String(selection.has(keyOf('p', photo.id))) : null,
+    'aria-label': organizing ? `Select photo ${name}` : `View ${name}`,
   })
   const open = (event: MouseEvent) => {
+    if (chooseOnClick(event, 'p', photo.id)) return
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
     event.preventDefault()
     openLightbox(siblings, photo.id)
   }
   hit.addEventListener('click', open)
+  hit.addEventListener('keydown', (event) => chooseOnKeydown(event, 'p', photo.id))
 
   const quick = el('button', {
     class: 'tile__dl',
@@ -445,11 +500,13 @@ function listRows(folders: FolderEntry[], photos: Photo[]): HTMLElement {
     const row = el(
       'a',
       {
-        class: 'row',
-        role: 'row',
+        class: `row${selection.has(keyOf('f', folder.id)) ? ' is-selected' : ''}`,
+        role: organizing ? 'checkbox' : 'row',
+        'aria-checked': organizing ? String(selection.has(keyOf('f', folder.id))) : null,
         href: folderHref(folder.id),
         'data-link': true,
         'data-drop-folder': folder.id,
+        'aria-label': organizing ? `Select folder ${folder.name}` : null,
       },
       [
         el('span', { class: 'list__cell list__cell--name' }, [
@@ -475,6 +532,8 @@ function listRows(folders: FolderEntry[], photos: Photo[]): HTMLElement {
       event.preventDefault()
       openFolderMenu(folder, event.clientX, event.clientY)
     })
+    row.addEventListener('click', (event) => chooseOnClick(event, 'f', folder.id))
+    row.addEventListener('keydown', (event) => chooseOnKeydown(event, 'f', folder.id))
     table.append(stagger(row, rowIndex++))
   }
 
@@ -489,11 +548,13 @@ function listRows(folders: FolderEntry[], photos: Photo[]): HTMLElement {
     const row = el(
       'a',
       {
-        class: 'row',
-        role: 'row',
+        class: `row${selection.has(keyOf('p', photo.id)) ? ' is-selected' : ''}`,
+        role: organizing ? 'checkbox' : 'row',
+        'aria-checked': organizing ? String(selection.has(keyOf('p', photo.id))) : null,
         href: hrefFor({ folderId: photo.folderId, photoId: photo.id }),
         'data-link': true,
         'data-photo': photo.id,
+        'aria-label': organizing ? `Select photo ${displayName(photo)}` : null,
       },
       [
         el('span', { class: 'list__cell list__cell--name' }, [
@@ -507,10 +568,12 @@ function listRows(folders: FolderEntry[], photos: Photo[]): HTMLElement {
       ],
     )
     row.addEventListener('click', (event) => {
+      if (chooseOnClick(event, 'p', photo.id)) return
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
       event.preventDefault()
       openLightbox(photos, photo.id)
     })
+    row.addEventListener('keydown', (event) => chooseOnKeydown(event, 'p', photo.id))
     row.addEventListener('contextmenu', (event) => {
       event.preventDefault()
       openPhotoMenu(photo, event.clientX, event.clientY)
@@ -660,6 +723,43 @@ function paneHeader(): HTMLElement {
 
   const actions = el('div', { class: 'pane__actions' })
 
+  if (admin && organizing && state.current && !state.current.lock) {
+    const visible = [
+      ...state.current.folders.map((item) => keyOf('f', item.id)),
+      ...state.current.photos.map((item) => keyOf('p', item.id)),
+    ]
+    const selectedFolders = state.current.folders.filter((item) => selection.has(keyOf('f', item.id)))
+    const selectedPhotos = state.current.photos.filter((item) => selection.has(keyOf('p', item.id)))
+    const count = selectedFolders.length + selectedPhotos.length
+    const button = (label: string, run: () => void, danger = false) => {
+      const node = el('button', { class: `btn${danger ? ' btn--danger' : ''}`, type: 'button', text: label })
+      node.addEventListener('click', run)
+      actions.append(node)
+    }
+    actions.append(el('span', { class: 'pane__selected', text: `${count} selected` }))
+    button(visible.length && visible.slice(0, MAX_SELECTION).every((key) => selection.has(key)) ? 'Clear' : 'Select all', () => {
+      if (visible.length > MAX_SELECTION) toastLimit()
+      const all = visible.slice(0, MAX_SELECTION)
+      if (all.every((key) => selection.has(key))) selection.clear()
+      else { selection.clear(); all.forEach((key) => selection.add(key)) }
+      touch()
+    })
+    if (count === 1) button('Rename / details', () => {
+      stopOrganizing()
+      if (selectedFolders[0]) admin.editFolder(selectedFolders[0])
+      else if (selectedPhotos[0]) admin.renamePhoto(selectedPhotos[0])
+    })
+    if (count) {
+      button('Move', () => admin.moveSelection(
+        selectedPhotos.map((item) => item.id), selectedFolders.map((item) => item.id), stopOrganizing,
+      ))
+      button('Delete', () => admin.deleteSelection(selectedPhotos, selectedFolders, stopOrganizing), true)
+    }
+    button('Done', stopOrganizing)
+    head.append(actions)
+    return head
+  }
+
   // Anyone who can see the folder can take it; /download still checks each
   // photo, so a locked subfolder cannot ride along inside the archive.
   if (state.current && !state.current.lock) {
@@ -682,6 +782,19 @@ function paneHeader(): HTMLElement {
   }
 
   if (admin) {
+    if (folder) {
+      const manage = el('button', { class: 'btn', type: 'button', text: 'Folder options' })
+      manage.addEventListener('click', () => {
+        const rect = manage.getBoundingClientRect()
+        openFolderMenu(folder, rect.right - 8, rect.bottom + 6, manage)
+      })
+      actions.append(manage)
+    }
+    if (state.current && !state.current.lock && (state.current.folders.length || state.current.photos.length)) {
+      const organize = el('button', { class: 'btn', type: 'button', text: 'Organize' })
+      organize.addEventListener('click', () => { organizing = true; selection.clear(); touch() })
+      actions.append(organize)
+    }
     const make = el('button', { class: 'btn', type: 'button' }, [
       el('span', { class: 'btn__icon', html: icon('folderPlus') }),
       el('span', { text: state.folderId === ROOT ? 'New folder' : 'New subfolder' }),
@@ -767,6 +880,12 @@ let animatedView = ''
 
 function renderContent(): void {
   const view = state.search ? `search:${state.search.query}` : `folder:${state.folderId}`
+  if (selectionScope !== view || !adminHooks() || state.statsOpen) {
+    organizing = false
+    selection.clear()
+    selectionScope = view
+  }
+  contentHost.classList.toggle('is-organizing', organizing)
   contentHost.classList.toggle('is-refill', view === animatedView)
   animatedView = view
 

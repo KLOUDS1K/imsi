@@ -242,7 +242,10 @@ export function createAppToolbar(rt: AppRuntime, state: ShellState, actions: Too
           if (publishing || !ctx.doc.value) return;
           publishing = true;
           publishBtn?.setBusy(true);
-          void Promise.resolve(actions.publish?.onPublish())
+          // Defer the callback as well: a host can reject synchronously (for
+          // example when the wrong local photo is open), and the error still
+          // needs to reach the toast rather than escape the click handler.
+          void Promise.resolve().then(() => actions.publish?.onPublish())
             .catch((error: unknown) => ctx.toast(`Could not save: ${error instanceof Error ? error.message : String(error)}`, 'error', 7000))
             .finally(() => {
               publishing = false;

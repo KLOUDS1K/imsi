@@ -44,6 +44,7 @@ import type {
   StylePair,
   WatermarkSettings,
 } from './types';
+import type { ImportReport } from './library/import';
 
 /* ================================================================== */
 /* state/ — EditorStore, params math, serialization, presets           */
@@ -642,6 +643,8 @@ export interface LibraryApi {
   query(q: LibraryQuery): PhotoRecord[];
   facets(): LibraryFacets;
   importFiles(files: File[], opts?: { folder?: string; onProgress?: (p: ImportProgress) => void; signal?: AbortSignal }): Promise<PhotoRecord[]>;
+  /** File-by-file outcomes, including failures that do not reject the batch. */
+  importFilesDetailed(files: readonly File[], opts?: { folder?: string; onProgress?: (p: ImportProgress) => void; signal?: AbortSignal }): Promise<ImportReport>;
   getFile(id: string): Promise<Blob | undefined>;
   getThumbnailUrl(id: string): Promise<string | undefined>;
   setThumbnail(id: string, blob: Blob): Promise<void>;

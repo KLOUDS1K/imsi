@@ -97,15 +97,13 @@ export async function signOut(): Promise<void> {
 // ------------------------------------------------------------------ folders
 
 /** Every folder as an indented option, for the "move to" pickers. */
-function folderOptions(exclude?: string): { value: string; label: string }[] {
+function folderOptions(exclude: string[] = []): { value: string; label: string }[] {
   const banned = new Set<string>()
-  if (exclude) {
-    const collect = (id: string) => {
-      banned.add(id)
-      for (const child of state.tree.filter((f) => f.parentId === id)) collect(child.id)
-    }
-    collect(exclude)
+  const collect = (id: string) => {
+    banned.add(id)
+    for (const child of state.tree.filter((f) => f.parentId === id)) collect(child.id)
   }
+  exclude.forEach(collect)
 
   const out: { value: string; label: string }[] = [{ value: ROOT, label: 'Archive (top level)' }]
   const walk = (parentId: string, depth: number) => {
@@ -254,7 +252,7 @@ function moveFolder(folder: Folder): void {
         label: 'Destination',
         type: 'select',
         value: folder.parentId,
-        options: folderOptions(folder.id),
+        options: folderOptions([folder.id]),
       },
     ],
     onSubmit: async (values) => {
@@ -386,6 +384,59 @@ function deletePhoto(photo: Photo): void {
   })
 }
 
+function moveSelection(photoIds: string[], folderIds: string[], done: () => void): void {
+  const count = photoIds.length + folderIds.length
+  openSheet({
+    title: `Move ${plural(count, 'item')}`,
+    description: 'The original files and edits stay intact. Choose the destination folder.',
+    submitLabel: 'Move',
+    fields: [{
+      name: 'destination', label: 'Destination', type: 'select',
+      value: state.folderId, options: folderOptions(folderIds),
+    }],
+    onSubmit: async (values) => {
+      const destination = values.destination ?? ROOT
+      if (folderIds.includes(destination)) return 'Choose a folder outside the selection'
+      try {
+        await api.move(destination, photoIds, folderIds)
+      } catch (err) {
+        return err instanceof Error ? err.message : 'Could not move the selection'
+      }
+      done()
+      await reload()
+      toast(`Moved ${plural(count, 'item')}`)
+    },
+  })
+}
+
+function deleteSelection(selectedPhotos: Photo[], selectedFolders: Folder[], done: () => void): void {
+  const count = selectedPhotos.length + selectedFolders.length
+  openSheet({
+    title: `Delete ${plural(count, 'item')}?`,
+    description: 'Selected folders and everything inside them, including originals and edits, will be permanently removed.',
+    submitLabel: 'Delete permanently',
+    danger: true,
+    fields: [{ name: 'confirm', label: 'Type DELETE to confirm', required: true }],
+    onSubmit: async (values) => {
+      if (values.confirm !== 'DELETE') return 'Type DELETE to confirm'
+      let deleted = 0
+      const failed: string[] = []
+      for (const photo of selectedPhotos) {
+        try { await api.photos.remove(photo.id); deleted++ }
+        catch { failed.push(displayName(photo)) }
+      }
+      for (const folder of selectedFolders) {
+        try { await api.folders.remove(folder.id); deleted++ }
+        catch { failed.push(folder.name) }
+      }
+      done()
+      await reload()
+      if (deleted) toast(`Deleted ${plural(deleted, 'item')}`)
+      if (failed.length) toast(`Could not delete ${plural(failed.length, 'item')}: ${failed.slice(0, 3).join(', ')}`, 'error')
+    },
+  })
+}
+
 // ------------------------------------------------------------------ uploads
 
 interface Pending {
@@ -401,8 +452,8 @@ async function readDirectory(entry: FileSystemDirectoryEntry): Promise<FileSyste
   const reader = entry.createReader()
   const all: FileSystemEntry[] = []
   for (;;) {
-    const batch = await new Promise<FileSystemEntry[]>((resolve) => {
-      reader.readEntries(resolve, () => resolve([]))
+    const batch = await new Promise<FileSystemEntry[]>((resolve, reject) => {
+      reader.readEntries(resolve, () => reject(new Error(`Could not read the dropped folder “${entry.name}”`)))
     })
     if (!batch.length) break
     all.push(...batch)
@@ -412,13 +463,13 @@ async function readDirectory(entry: FileSystemDirectoryEntry): Promise<FileSyste
 
 async function walkEntry(entry: FileSystemEntry, dir: string[], out: Pending[]): Promise<void> {
   if (entry.isFile) {
-    const file = await new Promise<File | null>((resolve) => {
-      ;(entry as FileSystemFileEntry).file(resolve, () => resolve(null))
+    const file = await new Promise<File>((resolve, reject) => {
+      ;(entry as FileSystemFileEntry).file(resolve, () => reject(new Error(`Could not read the dropped file “${entry.name}”`)))
     })
-    if (file) out.push({ dir, file })
+    out.push({ dir, file })
     return
   }
-  if (dir.length >= MAX_DEPTH) return
+  if (dir.length >= MAX_DEPTH) throw new Error(`Dropped folders may be at most ${MAX_DEPTH} levels deep`)
   const children = await readDirectory(entry as FileSystemDirectoryEntry)
   for (const child of children) await walkEntry(child, [...dir, entry.name], out)
 }
@@ -466,6 +517,11 @@ async function runQueue(items: Pending[], targetId: string): Promise<void> {
     resolved.push({ folderId, file: item.file })
   }
 
+  // Register the whole batch up front: queued files belong in the denominator,
+  // not only the two currently transferring. This also makes every outcome
+  // visible if a later file fails.
+  const jobs = resolved.map((job) => ({ ...job, transfer: beginTransfer(job.file.name) }))
+
   let cursor = 0
   let warnings = 0
   let failures = 0
@@ -473,13 +529,13 @@ async function runQueue(items: Pending[], targetId: string): Promise<void> {
   const worker = async (): Promise<void> => {
     for (;;) {
       const index = cursor++
-      const job = resolved[index]
+      const job = jobs[index]
       if (!job) return
 
-      const transfer = beginTransfer(job.file.name)
+      const { transfer } = job
       try {
         const result = await uploadPhoto(job.file, job.folderId, (p) => {
-          transfer.stage(p.stage)
+          transfer.stage(p.stage, p.detail)
           if (p.ratio !== undefined) transfer.progress(p.ratio)
         })
         if (result.warning) warnings += 1
@@ -538,6 +594,7 @@ function acceptDrop(transfer: DataTransfer, folderId: string): void {
   // entry has to be claimed synchronously and walked afterwards.
   const entries: FileSystemEntry[] = []
   const loose: File[] = []
+  let unreadable = 0
 
   for (const item of Array.from(transfer.items ?? [])) {
     if (item.kind !== 'file') continue
@@ -546,11 +603,13 @@ function acceptDrop(transfer: DataTransfer, folderId: string): void {
     else {
       const file = item.getAsFile()
       if (file) loose.push(file)
+      else unreadable += 1
     }
   }
   if (!entries.length && !loose.length) loose.push(...Array.from(transfer.files ?? []))
 
   void (async () => {
+    if (unreadable) throw new Error(`${plural(unreadable, 'dropped file')} could not be read. Try the file picker instead`)
     const pending: Pending[] = loose.map((file) => ({ dir: [], file }))
     for (const entry of entries) await walkEntry(entry, [], pending)
     if (!pending.length) {
@@ -558,7 +617,9 @@ function acceptDrop(transfer: DataTransfer, folderId: string): void {
       return
     }
     startUpload(pending, folderId)
-  })()
+  })().catch((err) => {
+    toast(err instanceof Error ? err.message : 'Could not read all dropped files', 'error')
+  })
 }
 
 // --------------------------------------------------------------------- init
@@ -576,6 +637,8 @@ const HOOKS = {
   renamePhoto,
   movePhoto,
   deletePhoto,
+  moveSelection,
+  deleteSelection,
 }
 
 /**

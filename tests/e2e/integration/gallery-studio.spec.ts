@@ -20,6 +20,9 @@ test('gallery and Studio share one persisted light/dark theme', async ({ page })
   await page.route('**/api/hit', (route) => route.fulfill({ json: { ok: true } }));
 
   await page.goto('/');
+  // Let the initial tree and folder writes finish before simulating a theme
+  // choice made by Studio; an in-flight gallery update persists its old theme.
+  await expect(page.locator('[data-role="content"] .empty__title')).toBeVisible();
   await page.evaluate(() => {
     localStorage.setItem('kloud-theme', 'dark');
     localStorage.setItem('kloud.explorer.prefs', JSON.stringify({ view: 'grid', sortKey: 'date', sortDir: 'desc', theme: 'light', expanded: [] }));
